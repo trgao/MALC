@@ -61,7 +61,3 @@ struct SignInOutBox: View {
         }
     }
 }
-
-#Preview {
-    SignInOutBox()
-}

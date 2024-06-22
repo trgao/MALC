@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct MangaDetailsView: View {
     @StateObject var controller: MangaDetailsViewController
@@ -77,8 +78,12 @@ struct MangaDetailsView: View {
         }
         .background(Color(.systemGray6))
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Unable to load", isPresented: $controller.isLoadingError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+            Text("Unable to load")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
         .fullScreenCover(isPresented: $isShowingSafariView) {
             SafariView(url)

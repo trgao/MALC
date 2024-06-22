@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct MangaEditView: View {
     @State private var listStatus: MangaListStatus
@@ -140,11 +141,19 @@ struct MangaEditView: View {
             .presentationDragIndicator(.visible)
             .background(Color(.systemGray6))
         }
-        .alert("Unable to delete", isPresented: $isDeleteError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $isDeleteError, options: alertToastOptions) {
+                    Text("Unable to delete")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
-        .alert("Unable to edit", isPresented: $isEditError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $isEditError, options: alertToastOptions) {
+            Text("Unable to save")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
         .confirmationDialog("Are you sure?", isPresented: $isDeleting) {
             Button("Confirm", role: .destructive) {

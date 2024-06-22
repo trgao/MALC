@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct TopView: View {
     @StateObject var controller = TopViewController()
@@ -45,8 +46,12 @@ struct TopView: View {
                     .refreshable {
                         controller.refresh()
                     }
-                    .alert("Unable to load", isPresented: $controller.isLoadingError) {
-                        Button("Ok") {}
+                    .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                        Text("Unable to load")
+                            .padding(20)
+                            .background(.red)
+                            .foregroundStyle(.white)
+                            .cornerRadius(10)
                     }
                 } else if controller.type == .manga {
                     ScrollView {
@@ -63,8 +68,12 @@ struct TopView: View {
                     .refreshable {
                         controller.refresh()
                     }
-                    .alert("Unable to load", isPresented: $controller.isLoadingError) {
-                        Button("Ok") {}
+                    .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                        Text("Unable to load")
+                            .padding(20)
+                            .background(.red)
+                            .foregroundStyle(.white)
+                            .cornerRadius(10)
                     }
                 }
                 if controller.isLoading {
@@ -74,7 +83,7 @@ struct TopView: View {
                     VStack {
                         Image(systemName: "medal")
                             .resizable()
-                            .frame(width: 40, height: 45)
+                            .frame(width: 40, height: 50)
                         Text("Nothing found. ")
                             .bold()
                     }
@@ -82,7 +91,6 @@ struct TopView: View {
             }
             .toolbar {
                 AnimeMangaToggle($controller.type, controller.refresh)
-                    .disabled(controller.isLoading)
             }
         }
     }

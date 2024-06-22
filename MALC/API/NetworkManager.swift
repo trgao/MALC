@@ -399,11 +399,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     func getUserAnimeList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
     }
     
     func getUserMangaList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)", type: MALMangaListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
     }
     
     func deleteUserAnime(id: Int, completion: @escaping (Error?) -> Void) {
@@ -423,15 +423,15 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     func getSeasonAnimeList(season: String, year: Int, page: Int, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/season/\(year)/\(season)?fields=start_season&sort=anime_num_list_users&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/anime/season/\(year)/\(season)?fields=start_season&sort=anime_num_list_users&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
     }
     
     func searchAnime(anime: String, page: Int, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime?q=\(anime)&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/anime?q=\(anime)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
     }
     
     func searchManga(manga: String, page: Int, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/manga?q=\(manga)&limit=50&offset=\((page - 1) * 50)", type: MALMangaListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/manga?q=\(manga)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
     }
     
     func getAnimeList(urlExtend: String, page: Int, completion: @escaping (JikanListResponse?, Error?) -> Void) {

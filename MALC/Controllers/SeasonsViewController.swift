@@ -8,8 +8,14 @@
 import Foundation
 
 class SeasonsViewController: ObservableObject {
-    @Published var items = [MALListAnime]()
-    @Published var isLoading = false
+    @Published var winterItems = [MALListAnime]()
+    @Published var springItems = [MALListAnime]()
+    @Published var summerItems = [MALListAnime]()
+    @Published var fallItems = [MALListAnime]()
+    @Published var isWinterLoading = false
+    @Published var isSpringLoading = false
+    @Published var isSummerLoading = false
+    @Published var isFallLoading = false
     @Published var isLoadingError = false
     @Published var season: String
     @Published var year: Int
@@ -21,17 +27,36 @@ class SeasonsViewController: ObservableObject {
         let seasons = ["winter", "spring", "summer", "fall"]
         self.season = seasons[((Calendar(identifier: .gregorian).dateComponents([.month], from: .now).month ?? 9) - 1) / 3]
         self.year = Calendar(identifier: .gregorian).dateComponents([.year], from: .now).year ?? 2001
-        refresh()
+        refresh(season)
     }
     
-    func refresh(_ clear: Bool = false) {
+    private func toggleSeasonLoading(_ value: Bool) {
+        if season == "winter" {
+            isWinterLoading = value
+        } else if season == "spring" {
+            isSpringLoading = value
+        } else if season == "summer" {
+            isSummerLoading = value
+        } else {
+            isFallLoading = value
+        }
+    }
+    
+    func currentSeasonLoading() -> Bool {
+        return (season == "winter" && isWinterLoading) || (season == "spring" && isSpringLoading) || (season == "summer" && isSummerLoading) || (season == "fall" && isFallLoading)
+    }
+    
+    func refresh(_ season: String, _ clear: Bool = false) {
         currentPage = 1
         canLoadMorePages = true
         DispatchQueue.main.async {
-            self.isLoading = true
+            self.toggleSeasonLoading(true)
             self.isLoadingError = false
             if clear {
-                self.items = []
+                self.winterItems = []
+                self.springItems = []
+                self.summerItems = []
+                self.fallItems = []
             }
         }
         networker.getSeasonAnimeList(season: season, year: year, page: currentPage) { data, error in
@@ -40,7 +65,7 @@ class SeasonsViewController: ObservableObject {
                     self.canLoadMorePages = false
                 }
                 DispatchQueue.main.async {
-                    self.isLoading = false
+                    self.toggleSeasonLoading(false)
                     if case NetworkError.notFound = error {} else {
                         self.isLoadingError = true
                     }
@@ -50,7 +75,7 @@ class SeasonsViewController: ObservableObject {
             
             guard let data = data else {
                 DispatchQueue.main.async {
-                    self.isLoading = false
+                    self.toggleSeasonLoading(false)
                     self.isLoadingError = true
                 }
                 return
@@ -67,9 +92,18 @@ class SeasonsViewController: ObservableObject {
                 group.notify(queue: .main, execute: {
                     self.currentPage = 2
                     self.canLoadMorePages = !(data.data.isEmpty)
+                    print(data.data.count)
                     DispatchQueue.main.async {
-                        self.items = data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year }
-                        self.isLoading = false
+                        if season == "winter" {
+                            self.winterItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
+                        } else if season == "spring" {
+                            self.springItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
+                        } else if season == "summer" {
+                            self.summerItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
+                        } else {
+                            self.fallItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
+                        }
+                        self.toggleSeasonLoading(false)
                     }
                 })
             }
@@ -77,20 +111,20 @@ class SeasonsViewController: ObservableObject {
     }
     
     private func loadMore() {
-        guard !isLoading && canLoadMorePages else {
+        guard !currentSeasonLoading() && canLoadMorePages else {
             return
         }
-        guard items.count >= 50 else {
+        guard (season == "winter" && winterItems.count >= 10) || (season == "spring" && springItems.count >= 10) || (season == "summer" && summerItems.count >= 10) || (season == "fall" && fallItems.count >= 10) else {
             return
         }
         DispatchQueue.main.async {
-            self.isLoading = true
+            self.toggleSeasonLoading(true)
             self.isLoadingError = false
         }
         networker.getSeasonAnimeList(season: season, year: year, page: currentPage) { data, error in
             if let _ = error {
                 DispatchQueue.main.async {
-                    self.isLoading = false
+                    self.toggleSeasonLoading(false)
                     self.isLoadingError = true
                 }
                 return
@@ -98,7 +132,7 @@ class SeasonsViewController: ObservableObject {
             
             guard let data = data else {
                 DispatchQueue.main.async {
-                    self.isLoading = false
+                    self.toggleSeasonLoading(false)
                     self.isLoadingError = true
                 }
                 return
@@ -116,8 +150,16 @@ class SeasonsViewController: ObservableObject {
                     self.currentPage += 1
                     self.canLoadMorePages = !(data.data.isEmpty)
                     DispatchQueue.main.async {
-                        self.items.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
-                        self.isLoading = false
+                        if self.season == "winter" {
+                            self.winterItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
+                        } else if self.season == "spring" {
+                            self.springItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
+                        } else if self.season == "summer" {
+                            self.summerItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
+                        } else {
+                            self.fallItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
+                        }
+                        self.toggleSeasonLoading(false)
                     }
                 })
             }
@@ -129,9 +171,26 @@ class SeasonsViewController: ObservableObject {
             loadMore()
             return
         }
-        let thresholdIndex = items.index(items.endIndex, offsetBy: -5)
-        if items.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
-            loadMore()
+        if season == "winter" {
+            let thresholdIndex = winterItems.index(winterItems.endIndex, offsetBy: -5)
+            if winterItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
+                loadMore()
+            }
+        } else if season == "spring" {
+            let thresholdIndex = springItems.index(springItems.endIndex, offsetBy: -5)
+            if springItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
+                loadMore()
+            }
+        } else if season == "summer" {
+            let thresholdIndex = summerItems.index(summerItems.endIndex, offsetBy: -5)
+            if summerItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
+                loadMore()
+            }
+        } else {
+            let thresholdIndex = fallItems.index(fallItems.endIndex, offsetBy: -5)
+            if fallItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
+                loadMore()
+            }
         }
     }
 }

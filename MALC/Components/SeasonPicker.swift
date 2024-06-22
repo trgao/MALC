@@ -25,8 +25,8 @@ struct SeasonPicker: View {
                 Text("Summer").tag("summer")
                 Text("Fall").tag("fall")
             }
-            .onChange(of: controller.season) { _ in
-                controller.refresh(true)
+            .onChange(of: controller.season) { season in
+                controller.refresh(season)
             }
             .pickerStyle(.segmented)
             .padding(5)

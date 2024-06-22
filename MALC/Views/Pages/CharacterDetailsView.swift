@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct CharacterDetailsView: View {
     @StateObject var controller: CharacterDetailsViewController
@@ -68,8 +69,12 @@ struct CharacterDetailsView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Unable to load", isPresented: $controller.isLoadingError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+            Text("Unable to load")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
     }
 }

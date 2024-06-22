@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct SearchView: View {
     @StateObject private var controller = SearchViewController()
@@ -61,14 +62,22 @@ struct SearchView: View {
             .onChange(of: searchText) { value in
                 if value.count > 2 {
                     controller.search(value)
+                } else {
+                    controller.animeItems = []
+                    controller.mangaItems = []
                 }
             }
             .onChange(of: isPresented) { _ in
                 controller.animeItems = []
                 controller.mangaItems = []
+                controller.type = .anime
             }
-            .alert("Something went wrong", isPresented: $controller.isLoadingError) {
-                Button("Ok") {}
+            .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                Text("Unable to load")
+                    .padding(20)
+                    .background(.red)
+                    .foregroundStyle(.white)
+                    .cornerRadius(10)
             }
         }
     }

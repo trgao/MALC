@@ -145,16 +145,36 @@ struct AnimeMangaListItem: View {
                             }
                         }
                     }
-                    if type == .anime, let score = animeListStatus?.score, score > 0 {
-                        Text("\(score) ⭐")
-                            .bold()
-                            .font(.system(size: 13))
-                            .padding(.top, 3)
-                    } else if type == .manga, let score = mangaListStatus?.score, score > 0 {
-                        Text("\(score) ⭐")
-                            .bold()
-                            .font(.system(size: 13))
-                            .padding(.top, 3)
+                    HStack {
+                        if type == .anime, let score = animeListStatus?.score, score > 0 {
+                            Text("\(score) ⭐")
+                                .bold()
+                                .font(.system(size: 13))
+                                .padding(.top, 3)
+                        } else if type == .manga, let score = mangaListStatus?.score, score > 0 {
+                            Text("\(score) ⭐")
+                                .bold()
+                                .font(.system(size: 13))
+                                .padding(.top, 3)
+                        }
+//                        if type == .anime {
+//                            Button {
+//                                isEditViewPresented = true
+//                            } label: {
+//                                Image(systemName: "square.and.pencil")
+//                            }
+//                            .sheet(isPresented: $isEditViewPresented) {
+//                                controller.refresh()
+//                            } content: {
+//                                AnimeEditView(id, anime.myListStatus, anime, $isEditViewPresented)
+//                            }
+//                            .disabled(controller.isLoading || controller.isInitialLoading)
+//                        } else {
+//                            Button {} label: {
+//                                Image(systemName: "square.and.pencil")
+//                            }
+//                            .disabled(true)
+//                        }
                     }
                 }
                 .padding(5)

@@ -34,8 +34,11 @@ class MyListViewController: ObservableObject {
             self.isLoading = true
             self.isLoadingError = false
             if clear {
-                self.animeItems = []
-                self.mangaItems = []
+                if self.type == .anime {
+                    self.animeItems = []
+                } else if self.type == .manga {
+                    self.mangaItems = []
+                }
             }
         }
         if type == .anime {
@@ -68,6 +71,7 @@ class MyListViewController: ObservableObject {
                         self.currentPage = 2
                         self.canLoadMorePages = !(data.data.isEmpty)
                         DispatchQueue.main.async {
+                            print(data.data)
                             self.animeItems = data.data
                             self.isLoading = false
                         }
@@ -111,10 +115,6 @@ class MyListViewController: ObservableObject {
                 }
             }
         }
-    }
-    
-    func refreshClear() {
-        refresh(true)
     }
     
     private func loadMore() {

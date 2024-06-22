@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct AnimeEditView: View {
     @State private var listStatus: AnimeListStatus
@@ -15,6 +16,7 @@ struct AnimeEditView: View {
     @Binding private var isPresented: Bool
     private let anime: Anime
     private let id: Int
+    private let hasWatched: Bool
     let networker = NetworkManager.shared
     
     init(_ id: Int, _ listStatus: AnimeListStatus?, _ anime: Anime, _ isPresented: Binding<Bool>) {
@@ -26,6 +28,7 @@ struct AnimeEditView: View {
         }
         self.anime = anime
         self._isPresented = isPresented
+        self.hasWatched = listStatus == nil || listStatus?.status == .planToWatch
     }
     
     var body: some View {
@@ -52,6 +55,8 @@ struct AnimeEditView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding(20)
+                Text(anime.title)
+                    .font(.system(size: 20))
                 List {
                     Section {
                         Picker(selection: $listStatus.status, label: Text("Status")) {
@@ -133,11 +138,19 @@ struct AnimeEditView: View {
             .presentationDragIndicator(.visible)
             .background(Color(.systemGray6))
         }
-        .alert("Unable to delete", isPresented: $isDeleteError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $isDeleteError, options: alertToastOptions) {
+            Text("Unable to delete")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
-        .alert("Unable to edit", isPresented: $isEditError) {
-            Button("Ok") {}
+        .simpleToast(isPresented: $isEditError, options: alertToastOptions) {
+            Text("Unable to save")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
         .confirmationDialog("Are you sure?", isPresented: $isDeleting) {
             Button("Confirm", role: .destructive) {

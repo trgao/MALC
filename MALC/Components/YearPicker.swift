@@ -23,7 +23,7 @@ struct YearPicker: View {
                 }
             }
             .onChange(of: controller.year) { _ in
-                controller.refresh(true)
+                controller.refresh(controller.season, true)
             }
         } label: {
             Button(String(controller.year)) {}

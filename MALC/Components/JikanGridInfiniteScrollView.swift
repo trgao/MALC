@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SimpleToast
 
 struct JikanGridInfiniteScrollView: View {
     @StateObject var controller: JikanGridInfiniteScrollViewController
@@ -36,8 +37,12 @@ struct JikanGridInfiniteScrollView: View {
                 }
             }
             .navigationTitle(title)
-            .alert("Unable to load", isPresented: $controller.isLoadingError) {
-                Button("Ok") {}
+            .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                Text("Unable to load")
+                    .padding(20)
+                    .background(.red)
+                    .foregroundStyle(.white)
+                    .cornerRadius(10)
             }
             if controller.isLoading {
                 LoadingView()
