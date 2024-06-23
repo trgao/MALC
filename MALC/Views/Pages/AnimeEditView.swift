@@ -17,7 +17,6 @@ struct AnimeEditView: View {
     private let title: String
     private let numEpisodes: Int
     private let id: Int
-    private let hasWatched: Bool
     let networker = NetworkManager.shared
     
     init(_ id: Int, _ listStatus: AnimeListStatus?, _ title: String, _ numEpisodes: Int, _ isPresented: Binding<Bool>) {
@@ -30,7 +29,6 @@ struct AnimeEditView: View {
         self.title = title
         self.numEpisodes = numEpisodes
         self._isPresented = isPresented
-        self.hasWatched = listStatus == nil || listStatus?.status == .planToWatch
     }
     
     var body: some View {
@@ -46,9 +44,13 @@ struct AnimeEditView: View {
                     Button {
                         networker.editUserAnime(id: id, listStatus: listStatus) { error in
                             if let _ = error {
-                                isEditError = true
+                                DispatchQueue.main.async {
+                                    isEditError = true
+                                }
                             } else {
-                                isPresented = false
+                                DispatchQueue.main.async {
+                                    isPresented = false
+                                }
                             }
                         }
                     } label: {
@@ -69,6 +71,14 @@ struct AnimeEditView: View {
                             Text("Plan To Watch").tag(StatusEnum.planToWatch as StatusEnum?)
                         }
                         .pickerStyle(.menu)
+                        .onChange(of: listStatus.status) { status in
+                            if status == .watching && listStatus.startDate == nil {
+                                listStatus.startDate = Date()
+                            }
+                            if status == .completed && listStatus.finishDate == nil {
+                                listStatus.finishDate = Date()
+                            }
+                        }
                         Picker(selection: $listStatus.score, label: Text("Score")) {
                             Text("0 - Not Yet Scored").tag(0)
                             Text("1 - Appalling").tag(1)
@@ -92,11 +102,18 @@ struct AnimeEditView: View {
                     }
                     Section {
                         if listStatus.startDate != nil {
-                            DatePicker(
-                                "Start Date",
-                                selection: $listStatus.startDate ?? Date(),
-                                displayedComponents: [.date]
-                            )
+                            HStack {
+                                DatePicker(
+                                    "Start Date",
+                                    selection: $listStatus.startDate ?? Date(),
+                                    displayedComponents: [.date]
+                                )
+                                Button {
+                                    listStatus.startDate = nil
+                                } label: {
+                                    Image(systemName: "xmark")
+                                }
+                            }
                         } else {
                             HStack {
                                 Text("Start Date")
@@ -109,11 +126,18 @@ struct AnimeEditView: View {
                             }
                         }
                         if listStatus.finishDate != nil {
-                            DatePicker(
-                                "Finish Date",
-                                selection: $listStatus.finishDate ?? Date(),
-                                displayedComponents: [.date]
-                            )
+                            HStack {
+                                DatePicker(
+                                    "Finish Date",
+                                    selection: $listStatus.finishDate ?? Date(),
+                                    displayedComponents: [.date]
+                                )
+                                Button {
+                                    listStatus.finishDate = nil
+                                } label: {
+                                    Image(systemName: "xmark")
+                                }
+                            }
                         } else {
                             HStack {
                                 Text("Finish Date")
@@ -162,7 +186,7 @@ struct AnimeEditView: View {
                         }
                     } else {
                         DispatchQueue.main.async {
-                            isPresented = false
+                            isPresented = true
                         }
                     }
                 }

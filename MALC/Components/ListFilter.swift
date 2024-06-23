@@ -18,6 +18,7 @@ struct ListFilter: View {
         Menu {
             if controller.type == .anime {
                 Picker(selection: $controller.animeStatus, label: EmptyView()) {
+                    Text("All").tag(StatusEnum.none)
                     Text("Watching").tag(StatusEnum.watching)
                     Text("Completed").tag(StatusEnum.completed)
                     Text("On Hold").tag(StatusEnum.onHold)
@@ -33,6 +34,7 @@ struct ListFilter: View {
                 }
             } else if controller.type == .manga {
                 Picker(selection: $controller.mangaStatus, label: EmptyView()) {
+                    Text("All").tag(StatusEnum.none)
                     Text("Reading").tag(StatusEnum.reading)
                     Text("Completed").tag(StatusEnum.completed)
                     Text("On Hold").tag(StatusEnum.onHold)

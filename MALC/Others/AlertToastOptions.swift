@@ -10,7 +10,7 @@ import SimpleToast
 
 let alertToastOptions = SimpleToastOptions(
     alignment: .top,
-    hideAfter: 2,
+    hideAfter: 1,
     animation: .default,
     modifierType: .slide
 )

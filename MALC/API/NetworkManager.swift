@@ -399,11 +399,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     func getUserAnimeList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
     }
     
     func getUserMangaList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
+        getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
     }
     
     func getUserAnimeSuggestionList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
