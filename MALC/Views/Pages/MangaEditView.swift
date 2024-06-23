@@ -14,18 +14,22 @@ struct MangaEditView: View {
     @State private var isDeleting = false
     @State private var isEditError = false
     @Binding private var isPresented: Bool
-    private let manga: Manga
+    private let title: String
+    private let numVolumes: Int
+    private let numChapters: Int
     private let id: Int
     let networker = NetworkManager.shared
     
-    init(_ id: Int, _ listStatus: MangaListStatus?, _ manga: Manga, _ isPresented: Binding<Bool>) {
+    init(_ id: Int, _ listStatus: MangaListStatus?, _ title: String, _ numVolumes: Int, _ numChapters: Int, _ isPresented: Binding<Bool>) {
         self.id = id
         if listStatus == nil {
             self.listStatus = MangaListStatus(status: .planToRead, score: 0, numVolumesRead: 0, numChaptersRead: 0)
         } else {
             self.listStatus = listStatus!
         }
-        self.manga = manga
+        self.title = title
+        self.numVolumes = numVolumes
+        self.numChapters = numChapters
         self._isPresented = isPresented
     }
     
@@ -40,7 +44,7 @@ struct MangaEditView: View {
                     }
                     Spacer()
                     Button {
-                        networker.editUserManga(id: manga.id, listStatus: listStatus) { error in
+                        networker.editUserManga(id: id, listStatus: listStatus) { error in
                             if let _ = error {
                                 isEditError = true
                             } else {
@@ -78,19 +82,17 @@ struct MangaEditView: View {
                         }
                         .pickerStyle(.menu)
                         Picker(selection: $listStatus.numVolumesRead, label: Text("Volumes Read")) {
-                            ForEach(0...(manga.numVolumes == 0 ? 500 : manga.numVolumes), id: \.self) { number in
+                            ForEach(0...(numVolumes == 0 ? 500 : numVolumes), id: \.self) { number in
                                 Text(String(number))
                             }
                         }
                         .pickerStyle(.menu)
-                        .disabled(manga.status == "not_yet_published")
                         Picker(selection: $listStatus.numChaptersRead, label: Text("Chapters Read")) {
-                            ForEach(0...(manga.numChapters == 0 ? 5000 : manga.numChapters), id: \.self) { number in
+                            ForEach(0...(numChapters == 0 ? 5000 : numChapters), id: \.self) { number in
                                 Text(String(number))
                             }
                         }
                         .pickerStyle(.menu)
-                        .disabled(manga.status == "not_yet_published")
                     }
                     Section {
                         if listStatus.startDate != nil {

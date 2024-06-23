@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AnimeMangaListItem: View {
+    @State private var isEditViewPresented = false
     private let id: Int
     private let title: String?
     private let type: TypeEnum
@@ -27,6 +28,8 @@ struct AnimeMangaListItem: View {
         .planToRead: Color(.systemGray),
         .none: Color(.systemBlue)
     ]
+    private let refresh: () -> Void
+    let networker = NetworkManager.shared
     
     init(_ id: Int, _ title: String?, _ type: TypeEnum) {
         self.id = id
@@ -38,9 +41,10 @@ struct AnimeMangaListItem: View {
         self.numChapters = nil
         self.animeListStatus = nil
         self.mangaListStatus = nil
+        self.refresh = {}
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?, _ refresh: @escaping () -> Void) {
         self.id = id
         self.title = title
         self.type = type
@@ -50,9 +54,10 @@ struct AnimeMangaListItem: View {
         self.numChapters = nil
         self.animeListStatus = animeListStatus
         self.mangaListStatus = nil
+        self.refresh = refresh
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?, _ refresh: @escaping () -> Void) {
         self.id = id
         self.title = title
         self.type = type
@@ -62,6 +67,7 @@ struct AnimeMangaListItem: View {
         self.numChapters = numChapters
         self.animeListStatus = nil
         self.mangaListStatus = mangaListStatus
+        self.refresh = refresh
     }
     
     var body: some View {
@@ -157,24 +163,24 @@ struct AnimeMangaListItem: View {
                                 .font(.system(size: 13))
                                 .padding(.top, 3)
                         }
-//                        if type == .anime {
-//                            Button {
-//                                isEditViewPresented = true
-//                            } label: {
-//                                Image(systemName: "square.and.pencil")
-//                            }
-//                            .sheet(isPresented: $isEditViewPresented) {
-//                                controller.refresh()
-//                            } content: {
-//                                AnimeEditView(id, anime.myListStatus, anime, $isEditViewPresented)
-//                            }
-//                            .disabled(controller.isLoading || controller.isInitialLoading)
-//                        } else {
-//                            Button {} label: {
-//                                Image(systemName: "square.and.pencil")
-//                            }
-//                            .disabled(true)
-//                        }
+                        Spacer()
+                        if networker.isSignedIn && (animeListStatus != nil || mangaListStatus != nil) {
+                            Button {
+                                isEditViewPresented = true
+                            } label: {
+                                Image(systemName: "square.and.pencil")
+                            }
+                            .foregroundStyle(Color(.systemBlue))
+                            .sheet(isPresented: $isEditViewPresented) {
+                                refresh()
+                            } content: {
+                                if type == .anime {
+                                    AnimeEditView(id, animeListStatus, title!, numEpisodes!, $isEditViewPresented)
+                                } else if type == .manga {
+                                    MangaEditView(id, mangaListStatus, title!, numVolumes!, numChapters!, $isEditViewPresented)
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(5)

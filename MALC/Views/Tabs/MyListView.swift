@@ -20,7 +20,7 @@ struct MyListView: View {
                         if controller.type == .anime {
                             Section(controller.animeStatus.toString()) {
                                 ForEach(controller.animeItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus)
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus, { controller.refresh() })
                                         .onAppear {
                                             controller.loadMoreIfNeeded(currentItem: item)
                                         }
@@ -41,7 +41,7 @@ struct MyListView: View {
                         } else if controller.type == .manga {
                             Section(controller.mangaStatus.toString()) {
                                 ForEach(controller.mangaItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus)
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus, { controller.refresh() })
                                         .onAppear {
                                             controller.loadMoreIfNeeded(currentItem: item)
                                         }

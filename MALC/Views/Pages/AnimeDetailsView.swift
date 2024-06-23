@@ -113,7 +113,7 @@ struct AnimeDetailsView: View {
                     .sheet(isPresented: $isEditViewPresented) {
                         controller.refresh()
                     } content: {
-                        AnimeEditView(id, anime.myListStatus, anime, $isEditViewPresented)
+                        AnimeEditView(id, anime.myListStatus, anime.title, anime.numEpisodes, $isEditViewPresented)
                     }
                     .disabled(controller.isLoading || controller.isInitialLoading)
                 } else {

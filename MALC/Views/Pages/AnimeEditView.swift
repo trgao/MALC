@@ -14,19 +14,21 @@ struct AnimeEditView: View {
     @State private var isDeleting = false
     @State private var isEditError = false
     @Binding private var isPresented: Bool
-    private let anime: Anime
+    private let title: String
+    private let numEpisodes: Int
     private let id: Int
     private let hasWatched: Bool
     let networker = NetworkManager.shared
     
-    init(_ id: Int, _ listStatus: AnimeListStatus?, _ anime: Anime, _ isPresented: Binding<Bool>) {
+    init(_ id: Int, _ listStatus: AnimeListStatus?, _ title: String, _ numEpisodes: Int, _ isPresented: Binding<Bool>) {
         self.id = id
         if listStatus == nil {
             self.listStatus = AnimeListStatus(status: .planToWatch, score: 0, numEpisodesWatched: 0)
         } else {
             self.listStatus = listStatus!
         }
-        self.anime = anime
+        self.title = title
+        self.numEpisodes = numEpisodes
         self._isPresented = isPresented
         self.hasWatched = listStatus == nil || listStatus?.status == .planToWatch
     }
@@ -42,7 +44,7 @@ struct AnimeEditView: View {
                     }
                     Spacer()
                     Button {
-                        networker.editUserAnime(id: anime.id, listStatus: listStatus) { error in
+                        networker.editUserAnime(id: id, listStatus: listStatus) { error in
                             if let _ = error {
                                 isEditError = true
                             } else {
@@ -55,7 +57,7 @@ struct AnimeEditView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding(20)
-                Text(anime.title)
+                Text(title)
                     .font(.system(size: 20))
                 List {
                     Section {
@@ -82,12 +84,11 @@ struct AnimeEditView: View {
                         }
                         .pickerStyle(.menu)
                         Picker(selection: $listStatus.numEpisodesWatched, label: Text("Episodes Watched")) {
-                            ForEach(0...(anime.numEpisodes == 0 ? 5000 : anime.numEpisodes), id: \.self) { number in
+                            ForEach(0...(numEpisodes == 0 ? 5000 : numEpisodes), id: \.self) { number in
                                 Text(String(number))
                             }
                         }
                         .pickerStyle(.menu)
-                        .disabled(anime.status == "not_yet_aired")
                     }
                     Section {
                         if listStatus.startDate != nil {

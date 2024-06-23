@@ -92,7 +92,6 @@ class SeasonsViewController: ObservableObject {
                 group.notify(queue: .main, execute: {
                     self.currentPage = 2
                     self.canLoadMorePages = !(data.data.isEmpty)
-                    print(data.data.count)
                     DispatchQueue.main.async {
                         if season == "winter" {
                             self.winterItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }

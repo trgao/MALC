@@ -99,7 +99,7 @@ struct MangaDetailsView: View {
                     .sheet(isPresented: $isEditViewPresented) {
                         controller.refresh()
                     } content: {
-                        MangaEditView(id, manga.myListStatus, manga, $isEditViewPresented)
+                        MangaEditView(id, manga.myListStatus, manga.title, manga.numVolumes, manga.numChapters, $isEditViewPresented)
                     }
                     .disabled(controller.isLoading || controller.isInitialLoading)
                 } else {

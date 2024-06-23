@@ -71,7 +71,6 @@ class MyListViewController: ObservableObject {
                         self.currentPage = 2
                         self.canLoadMorePages = !(data.data.isEmpty)
                         DispatchQueue.main.async {
-                            print(data.data)
                             self.animeItems = data.data
                             self.isLoading = false
                         }
