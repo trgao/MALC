@@ -406,6 +406,26 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters&status=\(status.toParameter())&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
     }
     
+    func getUserAnimeSuggestionList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
+        getMALResponse(urlExtend: "/anime/suggestions", type: MALAnimeListResponse.self, completion: completion)
+    }
+    
+    func getAnimeTopAiringList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
+        getMALResponse(urlExtend: "/anime/ranking?ranking_type=airing&limit=10", type: MALAnimeListResponse.self, completion: completion)
+    }
+    
+    func getAnimeTopUpcomingList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
+        getMALResponse(urlExtend: "/anime/ranking?ranking_type=upcoming&limit=10", type: MALAnimeListResponse.self, completion: completion)
+    }
+    
+    func getAnimeTopPopularList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
+        getMALResponse(urlExtend: "/anime/ranking?ranking_type=bypopularity&limit=10", type: MALAnimeListResponse.self, completion: completion)
+    }
+    
+    func getMangaTopPopularList(completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
+        getMALResponse(urlExtend: "/manga/ranking?ranking_type=bypopularity&limit=10", type: MALMangaListResponse.self, completion: completion)
+    }
+    
     func deleteUserAnime(id: Int, completion: @escaping (Error?) -> Void) {
         deleteItem(id: id, type: .anime, completion: completion)
     }
