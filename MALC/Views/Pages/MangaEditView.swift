@@ -81,18 +81,8 @@ struct MangaEditView: View {
                             Text("10 - Masterpiece").tag(10)
                         }
                         .pickerStyle(.menu)
-                        Picker(selection: $listStatus.numVolumesRead, label: Text("Volumes Read")) {
-                            ForEach(0...(numVolumes == 0 ? 500 : numVolumes), id: \.self) { number in
-                                Text(String(number))
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Picker(selection: $listStatus.numChaptersRead, label: Text("Chapters Read")) {
-                            ForEach(0...(numChapters == 0 ? 5000 : numChapters), id: \.self) { number in
-                                Text(String(number))
-                            }
-                        }
-                        .pickerStyle(.menu)
+                        NumberSelector($listStatus.numVolumesRead, "Volumes Read", numVolumes)
+                        NumberSelector($listStatus.numChaptersRead, "Chapters Read", numChapters)
                     }
                     Section {
                         if listStatus.startDate != nil {

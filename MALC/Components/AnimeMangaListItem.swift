@@ -170,6 +170,7 @@ struct AnimeMangaListItem: View {
                             } label: {
                                 Image(systemName: "square.and.pencil")
                             }
+                            .buttonStyle(BorderedButtonStyle())
                             .foregroundStyle(Color(.systemBlue))
                             .sheet(isPresented: $isEditViewPresented) {
                                 refresh()

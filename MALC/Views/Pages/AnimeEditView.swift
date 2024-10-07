@@ -93,12 +93,7 @@ struct AnimeEditView: View {
                             Text("10 - Masterpiece").tag(10)
                         }
                         .pickerStyle(.menu)
-                        Picker(selection: $listStatus.numEpisodesWatched, label: Text("Episodes Watched")) {
-                            ForEach(0...(numEpisodes == 0 ? 5000 : numEpisodes), id: \.self) { number in
-                                Text(String(number))
-                            }
-                        }
-                        .pickerStyle(.menu)
+                        NumberSelector($listStatus.numEpisodesWatched, "Episodes Watched", numEpisodes)
                     }
                     Section {
                         if listStatus.startDate != nil {
@@ -186,7 +181,7 @@ struct AnimeEditView: View {
                         }
                     } else {
                         DispatchQueue.main.async {
-                            isPresented = true
+                            isPresented = false
                         }
                     }
                 }

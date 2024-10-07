@@ -20,6 +20,4 @@ Used the MyAnimeList and Jikan API.
 * Add settings page for customisation and fix user profile
 * Add swiping gestures on list page
 * Fix logic when user's login expires after 1 month
-* Reduce number of episodes for scrolldown list when number of episodes is unknown
-* Fix bug where edit button cannot be pressed on list
 * Try integration with Spotify API
