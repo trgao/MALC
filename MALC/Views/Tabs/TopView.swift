@@ -9,7 +9,7 @@ import SwiftUI
 import SimpleToast
 
 struct TopView: View {
-    @StateObject var controller = TopViewController()
+    @StateObject private var controller = TopViewController()
     private let columns: [GridItem] = [
         GridItem(.adaptive(minimum: 150), alignment: .top),
     ]

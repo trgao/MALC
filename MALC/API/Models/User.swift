@@ -9,4 +9,6 @@ import Foundation
 
 struct User: Codable {
     let name: String?
+    let joinedAt: Date?
+    let picture: String?
 }

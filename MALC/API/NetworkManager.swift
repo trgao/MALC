@@ -15,6 +15,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     @Published var user: User?
     static var shared = NetworkManager()
     let imageCache = NSCache<NSString, ImageCache>()
+    var imageUrlMap = ThreadSafeDictionary<String, String>()
     private var defaultSession = URLSession(configuration: URLSessionConfiguration.default)
     private let jikanBaseApi = "https://api.jikan.moe/v4"
     private let malBaseApi = "https://api.myanimelist.net/v2"
@@ -54,11 +55,13 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 self.isSignedIn = true
             }
             print("Currently logged in")
-            self.getUserProfile(completion: { user, error in
+            self.getUserProfile { user, error in
                 if let user = user {
                     self.user = user
+                    self.imageUrlMap["userImage"] = user.picture
+//                    self.downloadImage(id: "userImage", urlString: user.picture) { picture, error in }
                 }
-            })
+            }
         }
     }
     
@@ -73,21 +76,21 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
             if let error = error {
                 DispatchQueue.main.async {
-                   completion(error)
+                    completion(error)
                 }
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 DispatchQueue.main.async {
-                   completion(NetworkError.badResponse)
+                    completion(NetworkError.badResponse)
                 }
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
                 DispatchQueue.main.async {
-                   completion(NetworkError.badStatusCode)
+                    completion(NetworkError.badStatusCode)
                 }
                 return
             }
@@ -487,7 +490,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     func getUserProfile(completion: @escaping (User?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me?fields=mainPicture", type: User.self, completion: completion)
+        getMALResponse(urlExtend: "/users/@me", type: User.self, completion: completion)
     }
     
     func getUserAnimeList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
@@ -648,6 +651,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     
     func downloadImage(id: String, urlString: String?, completion: @escaping (Data?, Error?) -> Void) {
         if let urlString = urlString {
+            imageUrlMap[id] = urlString
             let url = URL(string: urlString)!
             download(id: id, imageUrl: url, completion: completion)
             return

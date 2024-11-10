@@ -9,7 +9,7 @@ import SwiftUI
 import SimpleToast
 
 struct SeasonsView: View {
-    @StateObject var controller = SeasonsViewController()
+    @StateObject private var controller = SeasonsViewController()
     private let columns: [GridItem] = [
         GridItem(.adaptive(minimum: 150), alignment: .top),
     ]

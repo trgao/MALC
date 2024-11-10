@@ -9,8 +9,8 @@ import SwiftUI
 import SimpleToast
 
 struct MyListView: View {
-    @ObservedObject var controller = MyListViewController()
-    @StateObject var networker = NetworkManager.shared
+    @ObservedObject private var controller = MyListViewController()
+    @StateObject private var networker = NetworkManager.shared
     
     var body: some View {
         NavigationStack {

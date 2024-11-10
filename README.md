@@ -17,6 +17,7 @@ Used the MyAnimeList and Jikan API.
 
 ## Things to be done
 
+* Fix search page and syncing with isSignedIn
 * Refactor alert messages when there is network error / authentication errors
 * Add settings page for customisation and fix user profile
 * Add swiping gestures on list page

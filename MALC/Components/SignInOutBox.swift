@@ -44,15 +44,18 @@ struct SignInOutBox: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else if let user = networker.user {
-                VStack {
-                    Text("Hello, \(user.name ?? "")")
-                        .frame(maxWidth: .infinity)
-                        .font(.system(size: 20))
-                        .bold()
-                    Button("Sign Out") {
-                        networker.signOut()
+                HStack {
+                    ImageFrame("userImage", 80, 80)
+                    VStack {
+                        Text("Hello, \(user.name ?? "")")
+                            .frame(maxWidth: .infinity)
+                            .font(.system(size: 20))
+                            .bold()
+                        Button("Sign Out") {
+                            networker.signOut()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
         }

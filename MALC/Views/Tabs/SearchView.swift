@@ -10,7 +10,7 @@ import SimpleToast
 
 struct SearchView: View {
     @StateObject private var controller = SearchViewController()
-    @State private var networker = NetworkManager.shared
+    @StateObject var networker = NetworkManager.shared
     @State private var isPresented = false
     @DebouncedState private var searchText = ""
     
@@ -189,6 +189,11 @@ struct SearchView: View {
                                     .padding(2)
                                 }
                             }
+                        }
+                        .onChange(of: networker.isSignedIn) { isSignedIn in
+                            print("test", isSignedIn)
+                            controller.animeSuggestions = []
+                            controller.loadSuggestions()
                         }
                         if controller.isPageLoading {
                             LoadingView()

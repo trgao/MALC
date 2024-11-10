@@ -160,6 +160,7 @@ class SearchViewController: ObservableObject {
     }
     
     func loadSuggestions() {
+        //issignedin is not actually synced properly with networker
         if !networker.isSignedIn || !animeSuggestions.isEmpty {
             return
         }
