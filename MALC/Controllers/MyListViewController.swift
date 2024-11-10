@@ -21,12 +21,6 @@ class MyListViewController: ObservableObject {
     var canLoadMorePages = true
     let networker = NetworkManager.shared
     
-    init() {
-        if networker.isSignedIn {
-            refresh()
-        }
-    }
-    
     func refresh(_ clear: Bool = false) {
         currentPage = 1
         canLoadMorePages = true

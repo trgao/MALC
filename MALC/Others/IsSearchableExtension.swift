@@ -34,14 +34,14 @@ public struct Searchable_iOS16: ViewModifier {
     @available(watchOS, unavailable)
     public func bodyModern(_ content: Content) -> some View {
         content
-            .searchable(text: $text, isPresented: $isPresented, prompt: prompt)
+            .searchable(text: $text, isPresented: $isPresented, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt)
     }
 
     public func bodyLegacy(_ content: Content) -> some View {
         SearchableInner_iOS16(legacyIsSearching: $legacyIsSearching) {
             content
         }
-        .searchable(text: $text, prompt: prompt)
+        .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt)
         .onChange(of: legacyIsSearching) { isPresented = $0 }
         .onAppear { isPresented = legacyIsSearching }
     }

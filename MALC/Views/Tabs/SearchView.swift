@@ -10,7 +10,7 @@ import SimpleToast
 
 struct SearchView: View {
     @StateObject private var controller = SearchViewController()
-    @StateObject private var networker = NetworkManager.shared
+    @State private var networker = NetworkManager.shared
     @State private var isPresented = false
     @DebouncedState private var searchText = ""
     
@@ -55,9 +55,7 @@ struct SearchView: View {
                         }
                     }
                 } else {
-                    if controller.isPageLoading {
-                        LoadingView()
-                    } else {
+                    ZStack {
                         ScrollView {
                             if networker.isSignedIn {
                                 VStack {
@@ -192,15 +190,19 @@ struct SearchView: View {
                                 }
                             }
                         }
-                        .onChange(of: networker.isSignedIn) { isSignedIn in
-                            if isSignedIn {
-                                controller.loadSuggestions()
-                            }
+                        if controller.isPageLoading {
+                            LoadingView()
                         }
                     }
                 }
             }
+            .onAppear {
+                controller.loadSuggestions()
+            }
             .searchable_ios16(text: $searchText, isPresented: $isPresented, prompt: "Search MAL")
+            .refreshable {
+                controller.refresh()
+            }
             .onChange(of: searchText) { value in
                 if value.count > 2 {
                     controller.search(value)

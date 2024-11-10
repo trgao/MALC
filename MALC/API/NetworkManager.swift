@@ -12,7 +12,6 @@ import KeychainAccess
 
 class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     @Published var isSignedIn = false
-    @Published var isExpired = false
     @Published var user: User?
     static var shared = NetworkManager()
     let imageCache = NSCache<NSString, ImageCache>()
@@ -55,7 +54,6 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 self.isSignedIn = true
             }
             print("Currently logged in")
-            checkExpired()
             self.getUserProfile(completion: { user, error in
                 if let user = user {
                     self.user = user
@@ -76,7 +74,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             if let error = error {
                 DispatchQueue.main.async {
                    completion(error)
-               }
+                }
                 return
             }
             
@@ -101,8 +99,6 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                     DispatchQueue.main.async {
                         self.keychain["accessToken"] = responseObject.accessToken
                         self.keychain["refreshToken"] = responseObject.refreshToken
-                        self.keychain["expiresIn"] = String(responseObject.expiresIn)
-                        self.keychain["retrieveDate"] = self.dateFormatter.string(from: Date())
                         completion(nil)
                     }
                 } catch {
@@ -116,13 +112,60 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         task.resume()
     }
     
-    private func checkExpired() {
-        if Date() - dateFormatter.date(from: keychain["retrieveDate"]!)! >= Double(keychain["expiresIn"]!)! {
-            signOut()
+    private func refreshToken(completion: @escaping (Error?) -> Void) {
+        guard let token = keychain["refreshToken"] else {
             DispatchQueue.main.async {
-                self.isExpired = true
+                completion(NetworkError.invalidRefreshToken)
+            }
+            return
+        }
+        let url = URL(string: "https://myanimelist.net/v1/oauth2/token")!
+        let parameters: Data = "client_id=\(client_id)&grant_type=refresh_token&refresh_token=\(token)".data(using: .utf8)!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
+        request.httpBody = parameters
+
+        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(error)
+                }
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                DispatchQueue.main.async {
+                    completion(NetworkError.badResponse)
+                }
+                return
+            }
+            
+            guard (200...299).contains(httpResponse.statusCode) else {
+                DispatchQueue.main.async {
+                    completion(NetworkError.badStatusCode)
+                }
+                return
+            }
+            
+            if let data = data {
+                do {
+                    let responseObject = try self.decoder.decode(MALAuthenticationResponse.self, from: data)
+                    print(responseObject)
+                    DispatchQueue.main.async {
+                        self.keychain["accessToken"] = responseObject.accessToken
+                        self.keychain["refreshToken"] = responseObject.refreshToken
+                        completion(nil)
+                    }
+                } catch {
+                    print(error)
+                    DispatchQueue.main.async {
+                        completion(error)
+                    }
+                }
             }
         }
+        task.resume()
     }
     
     func signIn(completion: @escaping (Error?) -> Void) {
@@ -170,14 +213,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             self.isSignedIn = false
             self.keychain["accessToken"] = nil
             self.keychain["refreshToken"] = nil
-            self.keychain["expiresIn"] = nil
-            self.keychain["retrieveDate"] = nil
         }
-    }
-    
-    func getAccessToken() {
-        checkExpired()
-        // still need to check if get 401 unauthorized code to see if need to refresh token
     }
     
     private func getMALResponse<T: Codable>(urlExtend: String, type: T.Type, completion: @escaping (T?, Error?) -> Void) {
@@ -199,6 +235,20 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             guard let httpResponse = response as? HTTPURLResponse else {
                 DispatchQueue.main.async {
                     completion(nil, NetworkError.badResponse)
+                }
+                return
+            }
+            
+            guard httpResponse.statusCode != 401 else {
+                self.refreshToken() { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            completion(nil, error)
+                        }
+                        return
+                    }
+                    
+                    self.getMALResponse(urlExtend: urlExtend, type: type, completion: completion)
                 }
                 return
             }
@@ -303,6 +353,20 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 return
             }
             
+            guard httpResponse.statusCode != 401 else {
+                self.refreshToken() { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            completion(error)
+                        }
+                        return
+                    }
+                    
+                    self.deleteItem(id: id, type: type, completion: completion)
+                }
+                return
+            }
+            
             guard (200...299).contains(httpResponse.statusCode) else {
                 DispatchQueue.main.async {
                    completion(NetworkError.badStatusCode)
@@ -342,6 +406,20 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 return
             }
             
+            guard httpResponse.statusCode != 401 else {
+                self.refreshToken() { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            completion(error)
+                        }
+                        return
+                    }
+                    
+                    self.editUserAnime(id: id, listStatus: listStatus, completion: completion)
+                }
+                return
+            }
+            
             guard (200...299).contains(httpResponse.statusCode) else {
                 DispatchQueue.main.async {
                    completion(NetworkError.badStatusCode)
@@ -377,6 +455,20 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             guard let httpResponse = response as? HTTPURLResponse else {
                 DispatchQueue.main.async {
                    completion(NetworkError.badResponse)
+                }
+                return
+            }
+            
+            guard httpResponse.statusCode != 401 else {
+                self.refreshToken() { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            completion(error)
+                        }
+                        return
+                    }
+                    
+                    self.editUserManga(id: id, listStatus: listStatus, completion: completion)
                 }
                 return
             }
@@ -571,7 +663,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
 }
 
 enum NetworkError: Error {
-    case badResponse, badStatusCode, badData, badLocalUrl, noImage, notFound
+    case badResponse, badStatusCode, badData, badLocalUrl, noImage, notFound, invalidRefreshToken
 }
 
 class ImageCache: NSObject, NSDiscardableContent {

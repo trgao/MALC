@@ -24,39 +24,17 @@ class SearchViewController: ObservableObject {
     let networker = NetworkManager.shared
     
     init() {
+        refresh()
+    }
+    
+    func refresh() {
+        loadSuggestions()
         DispatchQueue.global().async {
-            let group = DispatchGroup()
-            if self.networker.isSignedIn {
-                group.enter()
-                self.networker.getUserAnimeSuggestionList { data, error in
-                    if let _ = error {
-                        DispatchQueue.main.async {
-                            self.isPageLoading = false
-                            self.isLoadingError = true
-                        }
-                        return
-                    }
-                    
-                    guard let data = data else {
-                        DispatchQueue.main.async {
-                            self.isPageLoading = false
-                            self.isLoadingError = true
-                        }
-                        return
-                    }
-                    
-                    DispatchQueue.main.async {
-                        self.animeSuggestions = data.data
-                    }
-                    for anime in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium) { data, error in
-                            group.leave()
-                        }
-                    }
-                    group.leave()
-                }
+            DispatchQueue.main.async {
+                self.isPageLoading = true
+                self.isLoadingError = false
             }
+            let group = DispatchGroup()
             group.enter()
             self.networker.getAnimeTopAiringList { data, error in
                 if let _ = error {
@@ -182,6 +160,9 @@ class SearchViewController: ObservableObject {
     }
     
     func loadSuggestions() {
+        if !networker.isSignedIn || !animeSuggestions.isEmpty {
+            return
+        }
         DispatchQueue.global().async {
             DispatchQueue.main.async {
                 self.isPageLoading = true

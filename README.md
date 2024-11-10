@@ -19,5 +19,4 @@ Used the MyAnimeList and Jikan API.
 
 * Add settings page for customisation and fix user profile
 * Add swiping gestures on list page
-* Fix logic when user's login expires after 1 month
 * Try integration with Spotify API
