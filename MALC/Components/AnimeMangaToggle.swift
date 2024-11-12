@@ -11,9 +11,9 @@ struct AnimeMangaToggle: View {
     @Environment(\.isEnabled) private var isEnabled
     @Binding var type: TypeEnum
     @State private var offset: CGFloat = -17
-    private let refresh: () -> Void
+    private let refresh: () async -> Void
     
-    init(_ type: Binding<TypeEnum>, _ refresh: @escaping () -> Void) {
+    init(_ type: Binding<TypeEnum>, _ refresh: @escaping () async -> Void) {
         self._type = type
         self.refresh = refresh
     }
@@ -59,7 +59,9 @@ struct AnimeMangaToggle: View {
                         offset += 34
                     }
                 }
-                refresh()
+            }
+            Task {
+                await refresh()
             }
         }
     }

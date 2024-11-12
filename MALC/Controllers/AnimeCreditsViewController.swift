@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class AnimeCreditsViewController: ObservableObject {
     @Published var staff = [Staff]()
     @Published var isLoading = true
@@ -16,30 +17,23 @@ class AnimeCreditsViewController: ObservableObject {
     
     init(_ id: Int) {
         self.id = id
-        DispatchQueue.global().async {
-            let group = DispatchGroup()
-            group.enter()
-            self.networker.getAnimeStaff(id: id) { data, error in
-                if let data = data {
-                    self.staff = data.data
-                    for staff in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "person\(staff.id)", urlString: staff.person.images?.jpg.imageUrl) { data,  error in
-                            group.leave()
+        Task {
+            do {
+                let staffList = try await networker.getAnimeStaff(id: id)
+                self.staff = staffList
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for staff in staffList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "person\(staff.id)", urlString: staff.person.images?.jpg.imageUrl)
                         }
                     }
-                } else {
-                    DispatchQueue.main.async {
-                        self.isLoadingError = true
-                    }
                 }
-                group.leave()
+                
+                isLoading = false
+            } catch {
+                isLoading = false
+                isLoadingError = true
             }
-            group.notify(queue: .main, execute: {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                }
-            })
         }
     }
 }

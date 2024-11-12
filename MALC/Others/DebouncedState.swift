@@ -1,5 +1,5 @@
 //
-//  DebounceStatePropertyWrapperDemoNative.swift
+//  DebounceState.swift
 //  Code taken from https://gist.github.com/CodeSlicing/026d8481dea0e4f5f5da85ea4dce6fc4
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy

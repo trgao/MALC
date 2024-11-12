@@ -42,14 +42,15 @@ struct AnimeEditView: View {
                     }
                     Spacer()
                     Button {
-                        networker.editUserAnime(id: id, listStatus: listStatus) { error in
-                            if let _ = error {
-                                DispatchQueue.main.async {
-                                    isEditError = true
-                                }
-                            } else {
+                        Task {
+                            do {
+                                try await networker.editUserAnime(id: id, listStatus: listStatus)
                                 DispatchQueue.main.async {
                                     isPresented = false
+                                }
+                            } catch {
+                                DispatchQueue.main.async {
+                                    isEditError = true
                                 }
                             }
                         }
@@ -174,14 +175,16 @@ struct AnimeEditView: View {
         }
         .confirmationDialog("Are you sure?", isPresented: $isDeleting) {
             Button("Confirm", role: .destructive) {
-                networker.deleteUserAnime(id: id) { error in
-                    if let _ = error {
-                        DispatchQueue.main.async {
-                            isDeleteError = true
-                        }
-                    } else {
+                Task {
+                    do {
+                        try await networker.deleteUserAnime(id: id)
+                            
                         DispatchQueue.main.async {
                             isPresented = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            isDeleteError = true
                         }
                     }
                 }

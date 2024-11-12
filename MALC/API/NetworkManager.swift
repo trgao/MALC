@@ -25,6 +25,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     private let dateFormatter = ISO8601DateFormatter()
     
     override init() {
+        // JSON Decoder
         decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in
@@ -50,77 +51,58 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             return date_
         })
         super.init()
-        if keychain["accessToken"] != nil {
-            DispatchQueue.main.async {
-                self.isSignedIn = true
-            }
-            print("Currently logged in")
-            self.getUserProfile { user, error in
-                if let user = user {
-                    self.user = user
-                    self.imageUrlMap["userImage"] = user.picture
-//                    self.downloadImage(id: "userImage", urlString: user.picture) { picture, error in }
+        
+        // Check if user is currently signed in and retrieve user profile
+        Task {
+            if keychain["accessToken"] != nil {
+                DispatchQueue.main.async {
+                    self.isSignedIn = true
                 }
+                print("Currently logged in")
+                
+                let user = try await self.getUserProfile()
+                self.user = user
+                imageUrlMap["userImage"] = user.picture
+                await downloadImage(id: "userImage", urlString: user.picture)
             }
         }
     }
     
-    private func getAccessToken(_ code: String, _ codeVerifier: String, completion: @escaping (Error?) -> Void) {
+    // Get access token when user is signing in for the first time
+    private func getAccessToken(_ code: String, _ codeVerifier: String) async throws -> Void {
         let url = URL(string: "https://myanimelist.net/v1/oauth2/token")!
         let parameters: Data = "client_id=\(client_id)&code=\(code)&code_verifier=\(codeVerifier)&grant_type=authorization_code".data(using: .utf8)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
         request.httpBody = parameters
-
-        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(error)
-                }
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    completion(NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                    completion(NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            if let data = data {
-                do {
-                    let responseObject = try self.decoder.decode(MALAuthenticationResponse.self, from: data)
-                    print(responseObject)
-                    DispatchQueue.main.async {
-                        self.keychain["accessToken"] = responseObject.accessToken
-                        self.keychain["refreshToken"] = responseObject.refreshToken
-                        completion(nil)
-                    }
-                } catch {
-                    print(error)
-                    DispatchQueue.main.async {
-                        completion(error)
-                    }
-                }
-            }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+        
+        do {
+            let responseObject = try decoder.decode(MALAuthenticationResponse.self, from: data)
+            print(responseObject)
+            DispatchQueue.main.async {
+                self.keychain["accessToken"] = responseObject.accessToken
+                self.keychain["refreshToken"] = responseObject.refreshToken
+            }
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
     }
     
-    private func refreshToken(completion: @escaping (Error?) -> Void) {
+    // Refresh access token using stored refresh token
+    private func refreshToken() async throws -> Void {
         guard let token = keychain["refreshToken"] else {
-            DispatchQueue.main.async {
-                completion(NetworkError.invalidRefreshToken)
-            }
-            return
+            throw NetworkError.invalidRefreshToken
         }
         let url = URL(string: "https://myanimelist.net/v1/oauth2/token")!
         let parameters: Data = "client_id=\(client_id)&grant_type=refresh_token&refresh_token=\(token)".data(using: .utf8)!
@@ -129,88 +111,77 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
         request.httpBody = parameters
 
-        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(error)
-                }
-                return
-            }
+        let (data, response) = try await URLSession.shared.data(for: request)
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    completion(NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                    completion(NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            if let data = data {
-                do {
-                    let responseObject = try self.decoder.decode(MALAuthenticationResponse.self, from: data)
-                    print(responseObject)
-                    DispatchQueue.main.async {
-                        self.keychain["accessToken"] = responseObject.accessToken
-                        self.keychain["refreshToken"] = responseObject.refreshToken
-                        completion(nil)
-                    }
-                } catch {
-                    print(error)
-                    DispatchQueue.main.async {
-                        completion(error)
-                    }
-                }
-            }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
+            
+        guard httpResponse.statusCode != 403 else {
+            throw NetworkError.invalidRefreshToken
+        }
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        do {
+            let responseObject = try decoder.decode(MALAuthenticationResponse.self, from: data)
+            print(responseObject)
+            DispatchQueue.main.async {
+                self.keychain["accessToken"] = responseObject.accessToken
+                self.keychain["refreshToken"] = responseObject.refreshToken
+            }
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
     }
     
-    func signIn(completion: @escaping (Error?) -> Void) {
-        let pkce = PKCE.generateCodeVerifier()
+    // Sign in function with old completion handler syntax
+    private func signInWithCompletion(_ pkce: String, completion: @escaping (Result<String, NetworkError>) -> Void) {
         let session = ASWebAuthenticationSession(url: URL(string: "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=\(client_id)&code_challenge=\(pkce)")!, callbackURLScheme: "malc") { callbackURL, error in
             if let error = error {
                 DispatchQueue.main.async {
-                    completion(error)
+                    completion(.failure(.unknownError(error)))
                 }
                 return
             }
+
             if let callbackURL = callbackURL {
-                if let urlComponents = URLComponents(url: callbackURL, resolvingAgainstBaseURL: true), let items = urlComponents.queryItems {
-                    self.getAccessToken(items[0].value!, pkce) { error in
-                        if let error = error {
-                            DispatchQueue.main.async {
-                               completion(error)
-                            }
-                            return
-                        }
-                        self.getUserProfile(completion: { user, error in
-                            if let user = user {
-                                DispatchQueue.main.async {
-                                    self.isSignedIn = true
-                                    self.user = user
-                                    completion(nil)
-                                }
-                                return
-                            }
-                            DispatchQueue.main.async {
-                               completion(error)
-                           }
-                        })
-                    }
+                if let urlComponents = URLComponents(url: callbackURL, resolvingAgainstBaseURL: true), let items = urlComponents.queryItems, let token = items[0].value {
+                    completion(.success(token))
                 }
+            } else {
+                completion(.failure(.badResponse))
             }
         }
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = true
         session.start()
     }
+    
+    // Sign in user (async wrapper for signInWithCompletion)
+    func signIn() async throws -> Void {
+        let pkce = PKCE.generateCodeVerifier()
+        let token = try await withCheckedThrowingContinuation { continuation in
+            signInWithCompletion(pkce) { result in
+                switch result {
+                case .success(let token):
+                    continuation.resume(returning: token)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        try await getAccessToken(token, pkce)
+        let user = try await getUserProfile()
+        DispatchQueue.main.async {
+            self.isSignedIn = true
+            self.user = user
+        }
+    }
 
+    // Sign out user
     func signOut() {
         DispatchQueue.main.async {
             self.isSignedIn = false
@@ -219,7 +190,8 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         }
     }
     
-    private func getMALResponse<T: Codable>(urlExtend: String, type: T.Type, completion: @escaping (T?, Error?) -> Void) {
+    // Generic MALApi GET request
+    private func getMALResponse<T: Codable>(urlExtend: String, type: T.Type) async throws -> T {
         let url = URL(string: malBaseApi + urlExtend)!
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = [
@@ -227,113 +199,56 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
         ]
         let session = URLSession(configuration: config)
-        let task = session.dataTask(with: url) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
-                return
-            }
+        let (data, response) = try await session.data(for: URLRequest(url: url))
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badResponse)
-                }
-                return
-            }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
+        }
             
-            guard httpResponse.statusCode != 401 else {
-                self.refreshToken() { error in
-                    if let error = error {
-                        DispatchQueue.main.async {
-                            completion(nil, error)
-                        }
-                        return
-                    }
-                    
-                    self.getMALResponse(urlExtend: urlExtend, type: type, completion: completion)
-                }
-                return
-            }
+        guard httpResponse.statusCode != 401 else {
+            try await refreshToken()
+            return try await getMALResponse(urlExtend: urlExtend, type: type)
+        }
             
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                    if httpResponse.statusCode == 404 {
-                        completion(nil, NetworkError.notFound)
-                    } else {
-                        completion(nil, NetworkError.badStatusCode)
-                    }
-                }
-                return
-            }
-            
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badData)
-                }
-                return
-            }
-            
-            do {
-                let decoded = try self.decoder.decode(type.self, from: data)
-                DispatchQueue.main.async {
-                    completion(decoded, nil)
-                }
-            } catch let error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 404 {
+                throw NetworkError.notFound
+            } else {
+                throw NetworkError.badStatusCode(httpResponse.statusCode)
             }
         }
-        task.resume()
+            
+        do {
+            let decoded = try decoder.decode(type.self, from: data)
+            return decoded
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
     }
     
-    func getJikanResponse<T: Codable>(urlExtend: String, type: T.Type, completion: @escaping (T?, Error?) -> Void) {
+    // Generic JikanAPI GET request
+    private func getJikanResponse<T: Codable>(urlExtend: String, type: T.Type) async throws -> T {
         let url = URL(string: jikanBaseApi + urlExtend)!
-        let task = defaultSession.dataTask(with: url) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
-                return
-            }
+        let (data, response) = try await defaultSession.data(for: URLRequest(url: url))
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badData)
-                }
-                return
-            }
-            
-            do {
-                let decoded = try self.decoder.decode(T.self, from: data)
-                DispatchQueue.main.async {
-                    completion(decoded, nil)
-                }
-            } catch let error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
-            }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        do {
+            let decoded = try decoder.decode(T.self, from: data)
+            return decoded
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
     }
     
-    private func deleteItem(id: Int, type: TypeEnum, completion: @escaping (Error?) -> Void) {
+    // Delete anime or manga from user list
+    private func deleteItem(id: Int, type: TypeEnum) async throws -> Void {
         let url = URL(string: malBaseApi + "/\(type)/\(id)/my_list_status")!
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
@@ -341,49 +256,25 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
         ]
 
-        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                   completion(error)
-               }
-                return
-            }
+        let (_, response) = try await URLSession.shared.data(for: request)
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard httpResponse.statusCode != 401 else {
-                self.refreshToken() { error in
-                    if let error = error {
-                        DispatchQueue.main.async {
-                            completion(error)
-                        }
-                        return
-                    }
-                    
-                    self.deleteItem(id: id, type: type, completion: completion)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            print("deleted successfully")
-            completion(nil)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
+            
+        guard httpResponse.statusCode != 401 else {
+            try await refreshToken()
+            return try await deleteItem(id: id, type: type)
+        }
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        print("deleted successfully")
     }
     
-    func editUserAnime(id: Int, listStatus: AnimeListStatus, completion: @escaping (Error?) -> Void) {
+    func editUserAnime(id: Int, listStatus: AnimeListStatus) async throws -> Void {
         let url = URL(string: malBaseApi + "/anime/\(id)/my_list_status")!
         let parameters: Data = "status=\(listStatus.status!.toParameter())&score=\(listStatus.score)&num_watched_episodes=\(listStatus.numEpisodesWatched)".data(using: .utf8)!
         var request = URLRequest(url: url)
@@ -394,49 +285,25 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
         ]
 
-        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                   completion(error)
-               }
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard httpResponse.statusCode != 401 else {
-                self.refreshToken() { error in
-                    if let error = error {
-                        DispatchQueue.main.async {
-                            completion(error)
-                        }
-                        return
-                    }
-                    
-                    self.editUserAnime(id: id, listStatus: listStatus, completion: completion)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            print("edited successfully")
-            completion(nil)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
+            
+        guard httpResponse.statusCode != 401 else {
+            try await refreshToken()
+            return try await editUserAnime(id: id, listStatus: listStatus)
+        }
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        print("edited successfully")
     }
     
-    func editUserManga(id: Int, listStatus: MangaListStatus, completion: @escaping (Error?) -> Void) {
+    func editUserManga(id: Int, listStatus: MangaListStatus) async throws -> Void {
         let url = URL(string: malBaseApi + "/manga/\(id)/my_list_status")!
         let parameters: Data = "status=\(listStatus.status!.toParameter())&score=\(listStatus.score)&num_volumes_read=\(listStatus.numVolumesRead)&num_chapters_read=\(listStatus.numChaptersRead)".data(using: .utf8)!
         var request = URLRequest(url: url)
@@ -447,199 +314,175 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
         ]
 
-        let task = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                   completion(error)
-               }
-                return
-            }
+        let (_, response) = try await URLSession.shared.data(for: request)
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard httpResponse.statusCode != 401 else {
-                self.refreshToken() { error in
-                    if let error = error {
-                        DispatchQueue.main.async {
-                            completion(error)
-                        }
-                        return
-                    }
-                    
-                    self.editUserManga(id: id, listStatus: listStatus, completion: completion)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                   completion(NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            print("edited successfully")
-            completion(nil)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
         }
-        task.resume()
-    }
-    
-    func getUserProfile(completion: @escaping (User?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me", type: User.self, completion: completion)
-    }
-    
-    func getUserAnimeList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getUserMangaList(page: Int, status: StatusEnum, sort: String, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
-    }
-    
-    func getUserAnimeSuggestionList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/suggestions", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getAnimeTopAiringList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/ranking?ranking_type=airing&limit=10", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getAnimeTopUpcomingList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/ranking?ranking_type=upcoming&limit=10", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getAnimeTopPopularList(completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/ranking?ranking_type=bypopularity&limit=10", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getMangaTopPopularList(completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/manga/ranking?ranking_type=bypopularity&limit=10", type: MALMangaListResponse.self, completion: completion)
-    }
-    
-    func deleteUserAnime(id: Int, completion: @escaping (Error?) -> Void) {
-        deleteItem(id: id, type: .anime, completion: completion)
-    }
-    
-    func deleteUserManga(id: Int, completion: @escaping (Error?) -> Void) {
-        deleteItem(id: id, type: .manga, completion: completion)
-    }
-    
-    func getTopAnimeList(page: Int, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/ranking?ranking_type=all&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func getTopMangaList(page: Int, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/manga/ranking?ranking_type=all&limit=50&offset=\((page - 1) * 50)", type: MALMangaListResponse.self, completion: completion)
-    }
-    
-    func getSeasonAnimeList(season: String, year: Int, page: Int, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/season/\(year)/\(season)?fields=start_season&sort=anime_num_list_users&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func searchAnime(anime: String, page: Int, completion: @escaping (MALAnimeListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime?q=\(anime)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self, completion: completion)
-    }
-    
-    func searchManga(manga: String, page: Int, completion: @escaping (MALMangaListResponse?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/manga?q=\(manga)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self, completion: completion)
-    }
-    
-    func getAnimeList(urlExtend: String, page: Int, completion: @escaping (JikanListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/anime?" + urlExtend + "&page=\(page)", type: JikanListResponse.self, completion: completion)
-    }
-    
-    func getMangaList(urlExtend: String, page: Int, completion: @escaping (JikanListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/manga?" + urlExtend + "&page=\(page)", type: JikanListResponse.self, completion: completion)
-    }
-    
-    func getAnimeDetails(id: Int, completion: @escaping (Anime?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/anime/\(id)?fields=alternative_titles,start_date,end_date,synopsis,mean,rank,media_type,status,genres,my_list_status,num_episodes,start_season,broadcast,source,average_episode_duration,rating,studios,opening_themes,ending_themes,videos,recommendations", type: Anime.self, completion: completion)
-    }
-    
-    func getAnimeCharacters(id: Int, completion: @escaping (JikanCharactersListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/anime/\(id)/characters", type: JikanCharactersListResponse.self, completion: completion)
-    }
-    
-    func getCharacterDetails(id: Int, completion: @escaping (JikanCharacterDetailsResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/characters/\(id)/full", type: JikanCharacterDetailsResponse.self, completion: completion)
-    }
-    
-    func getAnimeRelations(id: Int, completion: @escaping (JikanRelationsListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/anime/\(id)/relations", type: JikanRelationsListResponse.self, completion: completion)
-    }
-    
-    func getAnimeStaff(id: Int, completion: @escaping (JikanStaffListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/anime/\(id)/staff", type: JikanStaffListResponse.self, completion: completion)
-    }
-    
-    func getPersonDetails(id: Int, completion: @escaping (JikanPersonDetailsResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/people/\(id)/full", type: JikanPersonDetailsResponse.self, completion: completion)
-    }
-    
-    func getMangaDetails(id: Int, completion: @escaping (Manga?, Error?) -> Void) {
-        getMALResponse(urlExtend: "/manga/\(id)?fields=alternative_titles,start_date,end_date,synopsis,mean,rank,media_type,status,genres,my_list_status,num_volumes,num_chapters,recommendations", type: Manga.self, completion: completion)
-    }
-    
-    func getMangaCharacters(id: Int, completion: @escaping (JikanCharactersListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/manga/\(id)/characters", type: JikanCharactersListResponse.self, completion: completion)
-    }
-    
-    func getMangaRelations(id: Int, completion: @escaping (JikanRelationsListResponse?, Error?) -> Void) {
-        getJikanResponse(urlExtend: "/manga/\(id)/relations", type: JikanRelationsListResponse.self, completion: completion)
-    }
-    
-    private func download(id: String, imageUrl: URL, completion: @escaping (Data?, Error?) -> Void) {
-        let task = defaultSession.downloadTask(with: imageUrl) { (localUrl: URL?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
-                return
-            }
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badResponse)
-                }
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badStatusCode)
-                }
-                return
-            }
-            
-            guard let localUrl = localUrl else {
-                DispatchQueue.main.async {
-                    completion(nil, NetworkError.badLocalUrl)
-                }
-                return
-            }
-            
-            do {
-                let data = try Data(contentsOf: localUrl)
-                let cache = ImageCache()
-                cache.image = data as NSData
-                self.imageCache.setObject(cache, forKey: id as NSString)
-                DispatchQueue.main.async {
-                    completion(data, nil)
-                }
-            } catch let error {
-                DispatchQueue.main.async {
-                    completion(nil, error)
-                }
-            }
+        guard httpResponse.statusCode != 401 else {
+            try await refreshToken()
+            return try await editUserManga(id: id, listStatus: listStatus)
         }
-        task.resume()
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        print("edited successfully")
     }
     
+    func getUserProfile() async throws -> User {
+        let response = try await getMALResponse(urlExtend: "/users/@me", type: User.self)
+        return response
+    }
+    
+    func getUserAnimeList(page: Int, status: StatusEnum, sort: String) async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getUserMangaList(page: Int, status: StatusEnum, sort: String) async throws -> [MALListManga] {
+        let response = try await getMALResponse(urlExtend: "/users/@me/mangalist?fields=list_status,num_volumes,num_chapters\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self)
+        return response.data
+    }
+    
+    func getUserAnimeSuggestionList() async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/suggestions", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeTopAiringList() async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/ranking?ranking_type=airing&limit=10", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeTopUpcomingList() async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/ranking?ranking_type=upcoming&limit=10", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeTopPopularList() async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/ranking?ranking_type=bypopularity&limit=10", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getMangaTopPopularList() async throws -> [MALListManga] {
+        let response = try await getMALResponse(urlExtend: "/manga/ranking?ranking_type=bypopularity&limit=10", type: MALMangaListResponse.self)
+        return response.data
+    }
+    
+    func deleteUserAnime(id: Int) async throws -> Void {
+        return try await deleteItem(id: id, type: .anime)
+    }
+    
+    func deleteUserManga(id: Int) async throws -> Void {
+        return try await deleteItem(id: id, type: .manga)
+    }
+    
+    func getTopAnimeList(page: Int) async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/ranking?ranking_type=all&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func getTopMangaList(page: Int) async throws -> [MALListManga] {
+        let response = try await getMALResponse(urlExtend: "/manga/ranking?ranking_type=all&limit=50&offset=\((page - 1) * 50)", type: MALMangaListResponse.self)
+        return response.data
+    }
+    
+    func getSeasonAnimeList(season: String, year: Int, page: Int) async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime/season/\(year)/\(season)?fields=start_season&sort=anime_num_list_users&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func searchAnime(anime: String, page: Int) async throws -> [MALListAnime] {
+        let response = try await getMALResponse(urlExtend: "/anime?q=\(anime)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALAnimeListResponse.self)
+        return response.data
+    }
+    
+    func searchManga(manga: String, page: Int) async throws -> [MALListManga] {
+        let response = try await getMALResponse(urlExtend: "/manga?q=\(manga)&limit=50&offset=\((page - 1) * 50)&nsfw=true", type: MALMangaListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeList(urlExtend: String, page: Int) async throws -> [JikanListItem] {
+        let response = try await getJikanResponse(urlExtend: "/anime?" + urlExtend + "&page=\(page)", type: JikanListResponse.self)
+        return response.data
+    }
+    
+    func getMangaList(urlExtend: String, page: Int) async throws -> [JikanListItem] {
+        let response = try await getJikanResponse(urlExtend: "/manga?" + urlExtend + "&page=\(page)", type: JikanListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeDetails(id: Int) async throws -> Anime {
+        let response = try await getMALResponse(urlExtend: "/anime/\(id)?fields=alternative_titles,start_date,end_date,synopsis,mean,rank,media_type,status,genres,my_list_status,num_episodes,start_season,broadcast,source,average_episode_duration,rating,studios,opening_themes,ending_themes,videos,recommendations", type: Anime.self)
+        return response
+    }
+    
+    func getAnimeCharacters(id: Int) async throws -> [ListCharacter] {
+        let response = try await getJikanResponse(urlExtend: "/anime/\(id)/characters", type: JikanCharactersListResponse.self)
+        return response.data
+    }
+    
+    func getCharacterDetails(id: Int) async throws -> Character {
+        let response = try await getJikanResponse(urlExtend: "/characters/\(id)/full", type: JikanCharacterDetailsResponse.self)
+        return response.data
+    }
+    
+    func getAnimeRelations(id: Int) async throws -> [Related] {
+        let response = try await getJikanResponse(urlExtend: "/anime/\(id)/relations", type: JikanRelationsListResponse.self)
+        return response.data
+    }
+    
+    func getAnimeStaff(id: Int) async throws -> [Staff] {
+        let response = try await getJikanResponse(urlExtend: "/anime/\(id)/staff", type: JikanStaffListResponse.self)
+        return response.data
+    }
+    
+    func getPersonDetails(id: Int) async throws -> Person {
+        let response = try await getJikanResponse(urlExtend: "/people/\(id)/full", type: JikanPersonDetailsResponse.self)
+        return response.data
+    }
+    
+    func getMangaDetails(id: Int) async throws -> Manga {
+        let response = try await getMALResponse(urlExtend: "/manga/\(id)?fields=alternative_titles,start_date,end_date,synopsis,mean,rank,media_type,status,genres,my_list_status,num_volumes,num_chapters,recommendations", type: Manga.self)
+        return response
+    }
+    
+    func getMangaCharacters(id: Int) async throws -> [ListCharacter] {
+        let response = try await getJikanResponse(urlExtend: "/manga/\(id)/characters", type: JikanCharactersListResponse.self)
+        return response.data
+    }
+    
+    func getMangaRelations(id: Int) async throws -> [Related] {
+        let response = try await getJikanResponse(urlExtend: "/manga/\(id)/relations", type: JikanRelationsListResponse.self)
+        return response.data
+    }
+    
+    // Download image
+    private func download(id: String, imageUrl: URL) async throws -> Void {
+        let (localUrl, response) = try await defaultSession.download(for: URLRequest(url: imageUrl))
+            
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
+        }
+            
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw NetworkError.badStatusCode(httpResponse.statusCode)
+        }
+            
+        do {
+            let data = try Data(contentsOf: localUrl)
+            let cache = ImageCache()
+            cache.image = data as NSData
+            self.imageCache.setObject(cache, forKey: id as NSString)
+        } catch let error {
+            throw NetworkError.unknownError(error)
+        }
+    }
+    
+    // Retrieve image from image cache
     func getImage(id: String) -> Image {
         if let cache = imageCache.object(forKey: id as NSString) {
             if let image = UIImage(data: cache.image as Data) {
@@ -649,25 +492,22 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         return Image(uiImage: UIImage(named: "placeholder.jpg")!)
     }
     
-    func downloadImage(id: String, urlString: String?, completion: @escaping (Data?, Error?) -> Void) {
+    // Wrapper function for download
+    func downloadImage(id: String, urlString: String?) async -> Void {
         if let urlString = urlString {
-            imageUrlMap[id] = urlString
-            let url = URL(string: urlString)!
-            download(id: id, imageUrl: url, completion: completion)
-            return
-        }
-        DispatchQueue.main.async {
-            completion(nil, NetworkError.noImage)
+            do {
+                imageUrlMap[id] = urlString
+                let url = URL(string: urlString)!
+                return try await download(id: id, imageUrl: url)
+            } catch {
+                print("Error downloading image")
+            }
         }
     }
     
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         return ASPresentationAnchor()
     }
-}
-
-enum NetworkError: Error {
-    case badResponse, badStatusCode, badData, badLocalUrl, noImage, notFound, invalidRefreshToken
 }
 
 class ImageCache: NSObject, NSDiscardableContent {

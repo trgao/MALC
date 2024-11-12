@@ -23,12 +23,12 @@ struct ImageFrame: View {
     
     var body: some View {
         if controller.isLoading {
-            ZStack {
-                ProgressView()
-                RoundedRectangle(cornerRadius: 10)
-                    .frame(width: width, height: height)
-                    .foregroundStyle(.gray)
-            }
+            Image(uiImage: UIImage(named: "placeholder.jpg")!)
+                .resizable()
+                .scaledToFill()
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(radius: 2)
         } else {
             networker.getImage(id: id)
                 .resizable()

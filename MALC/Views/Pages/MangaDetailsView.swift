@@ -97,7 +97,9 @@ struct MangaDetailsView: View {
                         Image(systemName: "square.and.pencil")
                     }
                     .sheet(isPresented: $isEditViewPresented) {
-                        controller.refresh()
+                        Task {
+                            await controller.refresh()
+                        }
                     } content: {
                         MangaEditView(id, manga.myListStatus, manga.title, manga.numVolumes, manga.numChapters, $isEditViewPresented)
                     }

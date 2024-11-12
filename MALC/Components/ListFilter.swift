@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ListFilter: View {
+    @EnvironmentObject var appState: AppState
     @StateObject var controller: MyListViewController
     
     init(_ controller: MyListViewController) {
@@ -25,12 +26,22 @@ struct ListFilter: View {
                     Text("Dropped").tag(StatusEnum.dropped)
                     Text("Plan To Watch").tag(StatusEnum.planToWatch)
                 }
+                .onChange(of: controller.animeStatus) { _ in
+                    Task {
+                        await controller.refresh(true)
+                    }
+                }
                 Divider()
                 Picker(selection: $controller.animeSort, label: EmptyView()) {
                     Text("By Score").tag("list_score")
                     Text("By Last Update").tag("list_updated_at")
                     Text("By Title").tag("anime_title")
                     Text("By Start Date").tag("anime_start_date")
+                }
+                .onChange(of: controller.animeSort) { _ in
+                    Task {
+                        await controller.refresh(true)
+                    }
                 }
             } else if controller.type == .manga {
                 Picker(selection: $controller.mangaStatus, label: EmptyView()) {
@@ -41,12 +52,22 @@ struct ListFilter: View {
                     Text("Dropped").tag(StatusEnum.dropped)
                     Text("Plan To Read").tag(StatusEnum.planToRead)
                 }
+                .onChange(of: controller.mangaStatus) { _ in
+                    Task {
+                        await controller.refresh(true)
+                    }
+                }
                 Divider()
                 Picker(selection: $controller.mangaSort, label: EmptyView()) {
                     Text("By Score").tag("list_score")
                     Text("By Last Update").tag("list_updated_at")
                     Text("By Title").tag("manga_title")
                     Text("By Start Date").tag("manga_start_date")
+                }
+                .onChange(of: controller.mangaSort) { _ in
+                    Task {
+                        await controller.refresh(true)
+                    }
                 }
             }
         } label: {

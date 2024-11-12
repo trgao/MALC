@@ -44,11 +44,12 @@ struct MangaEditView: View {
                     }
                     Spacer()
                     Button {
-                        networker.editUserManga(id: id, listStatus: listStatus) { error in
-                            if let _ = error {
-                                isEditError = true
-                            } else {
+                        Task {
+                            do {
+                                try await networker.editUserManga(id: id, listStatus: listStatus)
                                 isPresented = false
+                            } catch {
+                                isEditError = true
                             }
                         }
                     } label: {
@@ -149,15 +150,12 @@ struct MangaEditView: View {
         }
         .confirmationDialog("Are you sure?", isPresented: $isDeleting) {
             Button("Confirm", role: .destructive) {
-                networker.deleteUserManga(id: id) { error in
-                    if let _ = error {
-                        DispatchQueue.main.async {
-                            isDeleteError = true
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            isPresented = false
-                        }
+                Task {
+                    do {
+                        try await networker.deleteUserManga(id: id)
+                        isPresented = false
+                    } catch {
+                        isDeleteError = true
                     }
                 }
             }

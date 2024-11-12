@@ -23,7 +23,8 @@ struct CharacterDetailsView: View {
         ZStack {
             if controller.isLoading {
                 LoadingView()
-            } else if let character = controller.character {
+            }
+            if let character = controller.character {
                 List {
                     Section {
                         VStack(alignment: .center) {

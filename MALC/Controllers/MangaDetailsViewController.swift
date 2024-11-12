@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class MangaDetailsViewController: ObservableObject {
     @Published var manga: Manga?
     @Published var characters: [ListCharacter] = []
@@ -19,97 +20,64 @@ class MangaDetailsViewController: ObservableObject {
     
     init(_ id: Int) {
         self.id = id
-        DispatchQueue.global().async {
-            let group = DispatchGroup()
-            group.enter()
-            self.networker.getMangaDetails(id: id) { manga, error in
-                if let manga = manga {
-                    self.manga = manga
-                    for item in manga.recommendations {
-                        group.enter()
-                        self.networker.downloadImage(id: "manga\(item.id)", urlString: item.node.mainPicture?.medium) { data, error in
-                            group.leave()
+        Task {
+            do {
+                let manga = try await networker.getMangaDetails(id: id)
+                let characterList = try await networker.getMangaCharacters(id: id)
+                let relationList = try await networker.getMangaRelations(id: id)
+                self.manga = manga
+                self.characters = characterList
+                self.relations = relationList
+                
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for item in manga.recommendations.prefix(10) {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(item.id)", urlString: item.node.mainPicture?.medium)
                         }
                     }
-                } else {
-                    DispatchQueue.main.async {
-                        self.isLoadingError = true
-                        self.isInitialLoading = false
-                    }
-                }
-                group.leave()
-            }
-            group.enter()
-            self.networker.getMangaCharacters(id: id) { data, error in
-                if let data = data {
-                    self.characters = data.data
-                    for item in data.data.prefix(10) {
-                        group.enter()
-                        self.networker.downloadImage(id: "character\(item.id)", urlString: item.character.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+                    
+                    for character in characterList.prefix(10) {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "character\(character.id)", urlString: character.character.images?.jpg.imageUrl)
                         }
                     }
-                    group.leave()
-                    return
-                }
-                DispatchQueue.main.async {
-                    self.isLoadingError = true
-                    self.isInitialLoading = false
-                }
-                group.leave()
-            }
-            group.enter()
-            self.networker.getMangaRelations(id: id) { data, error in
-                if let data = data {
-                    self.relations = data.data
-                    for item in self.relations.flatMap({ $0.entry }).prefix(10) {
-                        group.enter()
-                        if item.type == .anime {
-                            self.networker.getAnimeDetails(id: item.id) { info, error in
-                                self.networker.downloadImage(id: "anime\(item.id)", urlString: info?.mainPicture?.medium) { image, error in
-                                    group.leave()
+                    
+                    for relation in relationList.flatMap({ $0.entry }).prefix(10) {
+                        taskGroup.addTask {
+                            do {
+                                if relation.type == .anime {
+                                    let anime = try await self.networker.getAnimeDetails(id: relation.id)
+                                    await self.networker.downloadImage(id: "anime\(relation.id)", urlString: anime.mainPicture?.medium)
+                                } else if relation.type == .manga {
+                                    let manga = try await self.networker.getMangaDetails(id: relation.id)
+                                    await self.networker.downloadImage(id: "manga\(relation.id)", urlString: manga.mainPicture?.medium)
                                 }
-                            }
-                        } else if item.type == .manga {
-                            self.networker.getMangaDetails(id: item.id) { info, error in
-                                self.networker.downloadImage(id: "manga\(item.id)", urlString: info?.mainPicture?.medium) { image, error in
-                                    group.leave()
-                                }
+                            } catch {
+                                print("Some unknown error occurred")
                             }
                         }
                     }
-                    group.leave()
-                    return
                 }
-                DispatchQueue.main.async {
-                    self.isLoadingError = true
-                    self.isInitialLoading = false
-                }
-                group.leave()
+                
+                isInitialLoading = false
+            } catch {
+                isLoadingError = true
+                isInitialLoading = false
             }
-            group.notify(queue: .main, execute: {
-                DispatchQueue.main.async {
-                    self.isInitialLoading = false
-                }
-            })
         }
     }
     
     
-    func refresh() {
-        DispatchQueue.main.async {
-            self.isLoading = true
-            self.isLoadingError = false
-        }
-        networker.getMangaDetails(id: id) { manga, error in
-            DispatchQueue.main.async {
-                if let manga = manga {
-                    self.manga = manga
-                } else {
-                    self.isLoadingError = true
-                }
-                self.isLoading = false
-            }
+    func refresh() async -> Void {
+        isLoading = true
+        isLoadingError = false
+        do {
+            let manga = try await networker.getMangaDetails(id: id)
+            self.manga = manga
+            isLoading = false
+        } catch {
+            isLoading = false
+            isLoadingError = true
         }
     }
 }

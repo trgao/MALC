@@ -12,9 +12,30 @@ struct SignInOutBox: View {
     @StateObject var networker = NetworkManager.shared
     @State private var isAuthenticating = false
     @State private var isAuthenticatingError = false
+    let dateFormatterPrint = DateFormatter()
+    
+    init() {
+        self.dateFormatterPrint.dateFormat = "MMM dd, yyyy"
+    }
     
     private func isCancelledLoginError(_ error: Error) -> Bool {
         (error as NSError).code == ASWebAuthenticationSessionError.canceledLogin.rawValue
+    }
+    
+    @MainActor
+    private func signIn() {
+        Task {
+            do {
+                isAuthenticating = true
+                try await networker.signIn()
+                isAuthenticating = false
+            } catch let error as NetworkError {
+                print(error.description)
+            } catch let error {
+                isAuthenticatingError = true
+                print(error.localizedDescription)
+            }
+        }
     }
     
     var body: some View {
@@ -33,24 +54,32 @@ struct SignInOutBox: View {
                         .font(.system(size: 16))
                         .padding([.bottom], 10)
                     Button("Sign In") {
-                        isAuthenticating = true
-                        networker.signIn() { error in
-                            isAuthenticating = false
-                            if let error, !isCancelledLoginError(error) {
-                                isAuthenticatingError = true
-                            }
-                        }
+                        signIn()
+//                        isAuthenticating = true
+//                        networker.signIn() { error in
+//                            isAuthenticating = false
+//                            if let error, !isCancelledLoginError(error) {
+//                                isAuthenticatingError = true
+//                            }
+//                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }
             } else if let user = networker.user {
                 HStack {
-                    ImageFrame("userImage", 80, 80)
+                    if let _ = user.picture {
+                        ImageFrame("userImage", 80, 80)
+                    }
                     VStack {
                         Text("Hello, \(user.name ?? "")")
                             .frame(maxWidth: .infinity)
                             .font(.system(size: 20))
                             .bold()
+                        if let date = user.joinedAt {
+                            Text("Joined on \(dateFormatterPrint.string(from: date))")
+                                .padding(1)
+                                .font(.system(size: 14))
+                        }
                         Button("Sign Out") {
                             networker.signOut()
                         }

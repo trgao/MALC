@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class CharactersListViewController: ObservableObject {
     @Published var isLoading = true
     private let characters: [ListCharacter]
@@ -14,19 +15,16 @@ class CharactersListViewController: ObservableObject {
     
     init(_ characters: [ListCharacter]) {
         self.characters = characters
-        DispatchQueue.global().async {
-           let group = DispatchGroup()
-           for character in self.characters {
-               group.enter()
-               self.networker.downloadImage(id: "character\(character.id)", urlString: character.character.images?.jpg.imageUrl) { data, error in
-                   group.leave()
-               }
-           }
-           group.notify(queue: .main, execute: {
-               DispatchQueue.main.async {
-                   self.isLoading = false
-               }
-           })
-       }
+        Task {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for character in self.characters {
+                    taskGroup.addTask {
+                        await self.networker.downloadImage(id: "character\(character.id)", urlString: character.character.images?.jpg.imageUrl)
+                    }
+                }
+            }
+            
+            isLoading = false
+        }
     }
 }

@@ -10,17 +10,11 @@ import SimpleToast
 
 @main
 struct MALCApp: App {
-    @StateObject var networker = NetworkManager.shared
-    private let toastOptions = SimpleToastOptions(
-        alignment: .bottom,
-        hideAfter: 5,
-        animation: .default,
-        modifierType: .scale
-    )
-    
+    @StateObject var appState = AppState()
     var body: some Scene {
         WindowGroup {
             MainView()
+                .environmentObject(appState)
         }
     }
 }

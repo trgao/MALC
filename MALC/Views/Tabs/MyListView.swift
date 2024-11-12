@@ -9,8 +9,10 @@ import SwiftUI
 import SimpleToast
 
 struct MyListView: View {
+    @EnvironmentObject var appState: AppState
     @ObservedObject private var controller = MyListViewController()
     @StateObject private var networker = NetworkManager.shared
+    @State private var viewId = UUID()
     
     var body: some View {
         NavigationStack {
@@ -20,9 +22,9 @@ struct MyListView: View {
                         if controller.type == .anime {
                             Section(controller.animeStatus.toString()) {
                                 ForEach(controller.animeItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus, { controller.refresh() })
-                                        .onAppear {
-                                            controller.loadMoreIfNeeded(currentItem: item)
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus, { await controller.refresh() })
+                                        .task {
+                                            await controller.loadMoreIfNeeded(currentItem: item)
                                         }
                                 }
                                 if !controller.isLoading && controller.animeItems.isEmpty {
@@ -37,13 +39,12 @@ struct MyListView: View {
                                     .padding(.vertical, 50)
                                 }
                             }
-                            .navigationTitle("My Anime List")
                         } else if controller.type == .manga {
                             Section(controller.mangaStatus.toString()) {
                                 ForEach(controller.mangaItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus, { controller.refresh() })
-                                        .onAppear {
-                                            controller.loadMoreIfNeeded(currentItem: item)
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus, { await controller.refresh() })
+                                        .task {
+                                            await controller.loadMoreIfNeeded(currentItem: item)
                                         }
                                 }
                                 if !controller.isLoading && controller.mangaItems.isEmpty {
@@ -58,7 +59,6 @@ struct MyListView: View {
                                     .padding(.vertical, 50)
                                 }
                             }
-                            .navigationTitle("My Manga List")
                         }
                     }
                     .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
@@ -68,27 +68,12 @@ struct MyListView: View {
                             .foregroundStyle(.white)
                             .cornerRadius(10)
                     }
-                    .refreshable{
-                        controller.refresh()
+                    .refreshable {
+                        await controller.refresh()
                     }
-                    .onChange(of: controller.animeStatus) { _ in
-                        controller.refresh(true)
-                    }
-                    .onChange(of: controller.animeSort) { _ in
-                        controller.refresh(true)
-                    }
-                    .onChange(of: controller.mangaStatus) { _ in
-                        controller.refresh(true)
-                    }
-                    .onChange(of: controller.mangaSort) { _ in
-                        controller.refresh(true)
-                    }
-                    .onChange(of: networker.isSignedIn) { _ in
-                        controller.refresh(true)
-                    }
-                    .onAppear {
+                    .task {
                         controller.objectWillChange.send()
-                        controller.refresh()
+                        await controller.refresh()
                     }
                     if controller.isLoading {
                         LoadingView()
@@ -99,9 +84,10 @@ struct MyListView: View {
                         ListFilter(controller)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        AnimeMangaToggle($controller.type, { controller.refresh() })
+                        AnimeMangaToggle($controller.type, { await controller.refresh() })
                     }
                 }
+                .navigationTitle(controller.type == .anime ? "My Anime List" : "My Manga List")
             } else {
                 VStack {
                     Image(systemName: "gear")

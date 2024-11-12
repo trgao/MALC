@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class MyListViewController: ObservableObject {
     @Published var animeItems = [MALListAnime]()
     @Published var mangaItems = [MALListManga]()
@@ -21,200 +22,120 @@ class MyListViewController: ObservableObject {
     var canLoadMorePages = true
     let networker = NetworkManager.shared
     
-    func refresh(_ clear: Bool = false) {
+    func refresh(_ clear: Bool = false) async -> Void {
         currentPage = 1
         canLoadMorePages = true
-        DispatchQueue.main.async {
-            self.isLoading = true
-            self.isLoadingError = false
-            if clear {
-                if self.type == .anime {
-                    self.animeItems = []
-                } else if self.type == .manga {
-                    self.mangaItems = []
-                }
+        isLoading = true
+        isLoadingError = false
+        if clear {
+            if type == .anime {
+                animeItems = []
+            } else if type == .manga {
+                mangaItems = []
             }
         }
-        if type == .anime {
-            networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort) { data, error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                guard let data = data else {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for anime in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium) { data, error in
-                            group.leave()
+        do {
+            if type == .anime {
+                let animeList = try await networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort)
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for anime in animeList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
                         }
                     }
-                    group.notify(queue: .main, execute: {
-                        self.currentPage = 2
-                        self.canLoadMorePages = !(data.data.isEmpty)
-                        DispatchQueue.main.async {
-                            self.animeItems = data.data
-                            self.isLoading = false
-                        }
-                    })
                 }
+
+                currentPage = 2
+                canLoadMorePages = !(animeList.isEmpty)
+                animeItems = animeList
+                isLoading = false
+            } else {
+                let mangaList = try await networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort)
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for manga in mangaList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                        }
+                    }
+                }
+
+                currentPage = 2
+                canLoadMorePages = !(mangaList.isEmpty)
+                mangaItems = mangaList
+                isLoading = false
             }
-        } else {
-            networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort) { data, error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                guard let data = data else {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for manga in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium) { data, error in
-                            group.leave()
-                        }
-                    }
-                    group.notify(queue: .main, execute: {
-                        self.currentPage = 2
-                        self.canLoadMorePages = !(data.data.isEmpty)
-                        DispatchQueue.main.async {
-                            self.mangaItems = data.data
-                            self.isLoading = false
-                        }
-                    })
-                }
-            }
+        } catch {
+            isLoading = false
+            isLoadingError = true
         }
     }
     
-    private func loadMore() {
+    private func loadMore() async -> Void {
+        // only load more when it is not loading and there are more pages to be loaded
         guard !isLoading && canLoadMorePages else {
             return
         }
-        guard (type == .anime && animeItems.count >= 50) || (type == .manga && mangaItems.count >= 50) else {
+        
+        // only load more when there are already items on the page
+        guard (type == .anime && animeItems.count > 0) || (type == .manga && mangaItems.count > 0) else {
             return
         }
-        DispatchQueue.main.async {
-            self.isLoading = true
-            self.isLoadingError = false
-        }
-        if type == .anime {
-            networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort) { data, error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                guard let data = data else {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for anime in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium) { data, error in
-                            group.leave()
+        
+        isLoading = true
+        isLoadingError = false
+        do {
+            if type == .anime {
+                let animeList = try await networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort)
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for anime in animeList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
                         }
                     }
-                    group.notify(queue: .main, execute: {
-                        self.currentPage += 1
-                        self.canLoadMorePages = !(data.data.isEmpty)
-                        DispatchQueue.main.async {
-                            self.animeItems.append(contentsOf: data.data)
-                            self.isLoading = false
-                        }
-                    })
                 }
+
+                currentPage += 1
+                canLoadMorePages = !(animeList.isEmpty)
+                animeItems.append(contentsOf: animeList)
+                isLoading = false
+            } else {
+                let mangaList = try await networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort)
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for manga in mangaList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                        }
+                    }
+                }
+
+                currentPage += 1
+                canLoadMorePages = !(mangaList.isEmpty)
+                mangaItems.append(contentsOf: mangaList)
+                isLoading = false
             }
-        } else {
-            networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort) { data, error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                guard let data = data else {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.isLoadingError = true
-                    }
-                    return
-                }
-                
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for manga in data.data {
-                        group.enter()
-                        self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium) { data, error in
-                            group.leave()
-                        }
-                    }
-                    group.notify(queue: .main, execute: {
-                        self.currentPage += 1
-                        self.canLoadMorePages = !(data.data.isEmpty)
-                        DispatchQueue.main.async {
-                            self.mangaItems.append(contentsOf: data.data)
-                            self.isLoading = false
-                        }
-                    })
-                }
-            }
+        } catch {
+            isLoading = false
+            isLoadingError = true
         }
     }
     
-    func loadMoreIfNeeded(currentItem item: MALListAnime?) {
+    func loadMoreIfNeeded(currentItem item: MALListAnime?) async {
         guard let item = item else {
-            loadMore()
-            return
+            return await loadMore()
         }
         let thresholdIndex = animeItems.index(animeItems.endIndex, offsetBy: -5)
         if animeItems.firstIndex(where: { $0.node.id == item.node.id }) == thresholdIndex {
-            loadMore()
+            return await loadMore()
         }
     }
     
-    func loadMoreIfNeeded(currentItem item: MALListManga?) {
+    func loadMoreIfNeeded(currentItem item: MALListManga?) async {
         guard let item = item else {
-            loadMore()
-            return
+            return await loadMore()
         }
         let thresholdIndex = mangaItems.index(mangaItems.endIndex, offsetBy: -5)
         if mangaItems.firstIndex(where: { $0.node.id == item.node.id }) == thresholdIndex {
-            loadMore()
+            return await loadMore()
         }
     }
 }

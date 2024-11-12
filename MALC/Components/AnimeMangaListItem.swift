@@ -28,7 +28,7 @@ struct AnimeMangaListItem: View {
         .planToRead: Color(.systemGray),
         .none: Color(.systemBlue)
     ]
-    private let refresh: () -> Void
+    private let refresh: () async -> Void
     let networker = NetworkManager.shared
     
     init(_ id: Int, _ title: String?, _ type: TypeEnum) {
@@ -44,7 +44,7 @@ struct AnimeMangaListItem: View {
         self.refresh = {}
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?, _ refresh: @escaping () -> Void) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?, _ refresh: @escaping () async -> Void) {
         self.id = id
         self.title = title
         self.type = type
@@ -57,7 +57,7 @@ struct AnimeMangaListItem: View {
         self.refresh = refresh
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?, _ refresh: @escaping () -> Void) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?, _ refresh: @escaping () async -> Void) {
         self.id = id
         self.title = title
         self.type = type
@@ -173,7 +173,9 @@ struct AnimeMangaListItem: View {
                             .buttonStyle(BorderedButtonStyle())
                             .foregroundStyle(Color(.systemBlue))
                             .sheet(isPresented: $isEditViewPresented) {
-                                refresh()
+                                Task {
+                                    await refresh()
+                                }
                             } content: {
                                 if type == .anime {
                                     AnimeEditView(id, animeListStatus, title!, numEpisodes!, $isEditViewPresented)

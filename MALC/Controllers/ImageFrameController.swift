@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class ImageFrameController: ObservableObject {
     @Published var isLoading = false
     private let id: String
@@ -16,13 +17,10 @@ class ImageFrameController: ObservableObject {
         self.id = id
         if let _ = networker.imageCache.object(forKey: id as NSString) {}
         else {
-            DispatchQueue.main.async {
-                self.isLoading = true
-            }
-            networker.downloadImage(id: id, urlString: networker.imageUrlMap[id]) { data, error in
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                }
+            isLoading = true
+            Task {
+                await networker.downloadImage(id: id, urlString: networker.imageUrlMap[id])
+                isLoading = false
             }
         }
     }

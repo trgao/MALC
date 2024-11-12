@@ -9,11 +9,13 @@ import SwiftUI
 import SimpleToast
 
 struct TopView: View {
+    @EnvironmentObject var appState: AppState
     @StateObject private var controller = TopViewController()
     private let columns: [GridItem] = [
         GridItem(.adaptive(minimum: 150), alignment: .top),
     ]
     @State private var offset: CGFloat = -18
+    @State private var viewId = UUID()
     let networker = NetworkManager.shared
     
     private func rankToString(_ rank: Int?) -> String {
@@ -36,45 +38,25 @@ struct TopView: View {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.animeItems, id: \.node.id) { item in
                                 AnimeMangaGridItem(item.node.id, item.node.title, .anime, rankToString(item.ranking?.rank))
-                                    .onAppear {
-                                        controller.loadMoreIfNeeded(currentItem: item)
+                                    .task {
+                                        await controller.loadMoreIfNeeded(currentItem: item)
                                     }
                             }
                         }
                     }
                     .navigationTitle("Top Anime")
-                    .refreshable {
-                        controller.refresh()
-                    }
-                    .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
-                        Text("Unable to load")
-                            .padding(20)
-                            .background(.red)
-                            .foregroundStyle(.white)
-                            .cornerRadius(10)
-                    }
                 } else if controller.type == .manga {
                     ScrollView {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.mangaItems, id: \.node.id) { item in
                                 AnimeMangaGridItem(item.node.id, item.node.title, .manga, rankToString(item.ranking?.rank))
-                                    .onAppear {
-                                        controller.loadMoreIfNeeded(currentItem: item)
+                                    .task {
+                                        await controller.loadMoreIfNeeded(currentItem: item)
                                     }
                             }
                         }
                     }
                     .navigationTitle("Top Manga")
-                    .refreshable {
-                        controller.refresh()
-                    }
-                    .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
-                        Text("Unable to load")
-                            .padding(20)
-                            .background(.red)
-                            .foregroundStyle(.white)
-                            .cornerRadius(10)
-                    }
                 }
                 if controller.isLoading {
                     LoadingView()
@@ -91,6 +73,24 @@ struct TopView: View {
             }
             .toolbar {
                 AnimeMangaToggle($controller.type, controller.refresh)
+            }
+            .task(id: viewId) {
+                if appState.isTopViewFirstLoad || appState.isTopViewRefresh {
+                    await controller.refresh()
+                    appState.isTopViewFirstLoad = false
+                    appState.isTopViewRefresh = false
+                }
+            }
+            .refreshable {
+                viewId = .init()
+                appState.isTopViewRefresh = true
+            }
+            .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                Text("Unable to load")
+                    .padding(20)
+                    .background(.red)
+                    .foregroundStyle(.white)
+                    .cornerRadius(10)
             }
         }
     }

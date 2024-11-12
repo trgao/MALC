@@ -30,8 +30,8 @@ struct JikanGridInfiniteScrollView: View {
                 LazyVGrid(columns: columns) {
                     ForEach(controller.items) { item in
                         AnimeMangaGridItem(item.id, item.title, type)
-                            .onAppear {
-                                controller.loadMoreIfNeeded(currentItem: item)
+                            .task {
+                                await controller.loadMoreIfNeeded(currentItem: item)
                             }
                     }
                 }

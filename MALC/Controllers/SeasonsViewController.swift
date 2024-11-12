@@ -7,7 +7,9 @@
 
 import Foundation
 
+@MainActor
 class SeasonsViewController: ObservableObject {
+    var appState: AppState
     @Published var winterItems = [MALListAnime]()
     @Published var springItems = [MALListAnime]()
     @Published var summerItems = [MALListAnime]()
@@ -17,178 +19,162 @@ class SeasonsViewController: ObservableObject {
     @Published var isSummerLoading = false
     @Published var isFallLoading = false
     @Published var isLoadingError = false
-    @Published var season: String
-    @Published var year: Int
     private var currentPage = 1
     private var canLoadMorePages = true
     let networker = NetworkManager.shared
     
-    init() {
-        let seasons = ["winter", "spring", "summer", "fall"]
-        self.season = seasons[((Calendar(identifier: .gregorian).dateComponents([.month], from: .now).month ?? 9) - 1) / 3]
-        self.year = Calendar(identifier: .gregorian).dateComponents([.year], from: .now).year ?? 2001
-        refresh(season)
+    init(_ appState: AppState) {
+        self.appState = appState
+    }
+    
+    func changeSeason(_ season: String) async -> Void {
+        appState.season = season
+        return await refresh()
+    }
+    
+    func changeYear(_ year: Int) async -> Void {
+        appState.year = year
+        return await refresh(true)
+    }
+    
+    func currentSeasonLoading() -> Bool {
+        return (appState.season == "winter" && isWinterLoading) || (appState.season == "spring" && isSpringLoading) || (appState.season == "summer" && isSummerLoading) || (appState.season == "fall" && isFallLoading)
     }
     
     private func toggleSeasonLoading(_ value: Bool) {
-        if season == "winter" {
+        if appState.season == "winter" {
             isWinterLoading = value
-        } else if season == "spring" {
+        } else if appState.season == "spring" {
             isSpringLoading = value
-        } else if season == "summer" {
+        } else if appState.season == "summer" {
             isSummerLoading = value
-        } else {
+        } else if appState.season == "fall" {
             isFallLoading = value
         }
     }
     
-    func currentSeasonLoading() -> Bool {
-        return (season == "winter" && isWinterLoading) || (season == "spring" && isSpringLoading) || (season == "summer" && isSummerLoading) || (season == "fall" && isFallLoading)
-    }
-    
-    func refresh(_ season: String, _ clear: Bool = false) {
+    func refresh(_ clear: Bool = false) async -> Void {
         currentPage = 1
         canLoadMorePages = true
-        DispatchQueue.main.async {
-            self.toggleSeasonLoading(true)
-            self.isLoadingError = false
-            if clear {
-                self.winterItems = []
-                self.springItems = []
-                self.summerItems = []
-                self.fallItems = []
-            }
+        toggleSeasonLoading(true)
+        isLoadingError = false
+        if clear {
+            winterItems = []
+            springItems = []
+            summerItems = []
+            fallItems = []
         }
-        networker.getSeasonAnimeList(season: season, year: year, page: currentPage) { data, error in
-            if let error = error {
-                if case NetworkError.notFound = error {
-                    self.canLoadMorePages = false
-                }
-                DispatchQueue.main.async {
-                    self.toggleSeasonLoading(false)
-                    if case NetworkError.notFound = error {} else {
-                        self.isLoadingError = true
+        do {
+            let animeList = try await networker.getSeasonAnimeList(season: appState.season, year: appState.year, page: currentPage)
+            
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for anime in animeList {
+                    taskGroup.addTask {
+                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
                     }
                 }
-                return
             }
             
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    self.toggleSeasonLoading(false)
-                    self.isLoadingError = true
-                }
-                return
+            currentPage = 2
+            canLoadMorePages = !(animeList.isEmpty)
+            if appState.season == "winter" {
+                winterItems = animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year }
+            } else if appState.season == "spring" {
+                springItems = animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year }
+            } else if appState.season == "summer" {
+                summerItems = animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year }
+            } else if appState.season == "fall" {
+                fallItems = animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year }
             }
+            toggleSeasonLoading(false)
+        } catch let error as NetworkError {
+            toggleSeasonLoading(false)
             
-            DispatchQueue.global().async {
-                let group = DispatchGroup()
-                for anime in data.data {
-                    group.enter()
-                    self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium) { data, error in
-                        group.leave()
-                    }
-                }
-                group.notify(queue: .main, execute: {
-                    self.currentPage = 2
-                    self.canLoadMorePages = !(data.data.isEmpty)
-                    DispatchQueue.main.async {
-                        if season == "winter" {
-                            self.winterItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
-                        } else if season == "spring" {
-                            self.springItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
-                        } else if season == "summer" {
-                            self.summerItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
-                        } else {
-                            self.fallItems = data.data.filter { $0.node.startSeason?.season == season && $0.node.startSeason?.year == self.year }
-                        }
-                        self.toggleSeasonLoading(false)
-                    }
-                })
+            // If 404 not found, usually means the season still has not been released yet
+            if case NetworkError.notFound = error {
+                canLoadMorePages = false
+            } else {
+                isLoadingError = true
             }
+        } catch {
+            toggleSeasonLoading(false)
+            isLoadingError = true
         }
     }
     
-    private func loadMore() {
+    private func loadMore() async -> Void {
+        // only load more when it is not loading and there are more pages to be loaded
         guard !currentSeasonLoading() && canLoadMorePages else {
             return
         }
-        guard (season == "winter" && winterItems.count >= 10) || (season == "spring" && springItems.count >= 10) || (season == "summer" && summerItems.count >= 10) || (season == "fall" && fallItems.count >= 10) else {
+        
+        // only load more when there are already items on the page
+        guard (appState.season == "winter" && winterItems.count > 0) || (appState.season == "spring" && springItems.count > 0) || (appState.season == "summer" && summerItems.count > 0) || (appState.season == "fall" && fallItems.count > 0) else {
             return
         }
-        DispatchQueue.main.async {
-            self.toggleSeasonLoading(true)
-            self.isLoadingError = false
-        }
-        networker.getSeasonAnimeList(season: season, year: year, page: currentPage) { data, error in
-            if let _ = error {
-                DispatchQueue.main.async {
-                    self.toggleSeasonLoading(false)
-                    self.isLoadingError = true
-                }
-                return
-            }
+        toggleSeasonLoading(true)
+        isLoadingError = false
+        do {
+            let animeList = try await networker.getSeasonAnimeList(season: appState.season, year: appState.year, page: currentPage)
             
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    self.toggleSeasonLoading(false)
-                    self.isLoadingError = true
-                }
-                return
-            }
-            
-            DispatchQueue.global().async {
-                let group = DispatchGroup()
-                for anime in data.data {
-                    group.enter()
-                    self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium) { data, error in
-                        group.leave()
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for anime in animeList {
+                    taskGroup.addTask {
+                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
                     }
                 }
-                group.notify(queue: .main, execute: {
-                    self.currentPage += 1
-                    self.canLoadMorePages = !(data.data.isEmpty)
-                    DispatchQueue.main.async {
-                        if self.season == "winter" {
-                            self.winterItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
-                        } else if self.season == "spring" {
-                            self.springItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
-                        } else if self.season == "summer" {
-                            self.summerItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
-                        } else {
-                            self.fallItems.append(contentsOf: data.data.filter { $0.node.startSeason?.season == self.season && $0.node.startSeason?.year == self.year })
-                        }
-                        self.toggleSeasonLoading(false)
-                    }
-                })
             }
+            
+            currentPage += 1
+            canLoadMorePages = !(animeList.isEmpty)
+            if appState.season == "winter" {
+                winterItems.append(contentsOf: animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year })
+            } else if appState.season == "spring" {
+                springItems.append(contentsOf: animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year })
+            } else if appState.season == "summer" {
+                summerItems.append(contentsOf: animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year })
+            } else if appState.season == "fall" {
+                fallItems.append(contentsOf: animeList.filter { $0.node.startSeason?.season == appState.season && $0.node.startSeason?.year == appState.year })
+            }
+            toggleSeasonLoading(false)
+        } catch let error as NetworkError {
+            toggleSeasonLoading(false)
+            
+            // If 404 not found, usually means the season still has not been released yet
+            if case NetworkError.notFound = error {
+                canLoadMorePages = false
+            } else {
+                isLoadingError = true
+            }
+        } catch {
+            toggleSeasonLoading(false)
+            isLoadingError = true
         }
     }
     
-    func loadMoreIfNeeded(currentItem item: MALListAnime?) {
+    func loadMoreIfNeeded(currentItem item: MALListAnime?) async -> Void {
         guard let item = item else {
-            loadMore()
-            return
+            return await loadMore()
         }
-        if season == "winter" {
+        if appState.season == "winter" {
             let thresholdIndex = winterItems.index(winterItems.endIndex, offsetBy: -5)
             if winterItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
-                loadMore()
+                return await loadMore()
             }
-        } else if season == "spring" {
+        } else if appState.season == "spring" {
             let thresholdIndex = springItems.index(springItems.endIndex, offsetBy: -5)
             if springItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
-                loadMore()
+                return await loadMore()
             }
-        } else if season == "summer" {
+        } else if appState.season == "summer" {
             let thresholdIndex = summerItems.index(summerItems.endIndex, offsetBy: -5)
             if summerItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
-                loadMore()
+                return await loadMore()
             }
-        } else {
+        } else if appState.season == "fall" {
             let thresholdIndex = fallItems.index(fallItems.endIndex, offsetBy: -5)
             if fallItems.firstIndex(where: { $0.id == item.id }) == thresholdIndex {
-                loadMore()
+                return await loadMore()
             }
         }
     }

@@ -73,7 +73,7 @@ struct AnimeDetailsView: View {
                     }
                 }
                 .refreshable {
-                    controller.refresh()
+                    await controller.refresh()
                 }
             }
             if controller.isLoading {
@@ -111,7 +111,9 @@ struct AnimeDetailsView: View {
                         Image(systemName: "square.and.pencil")
                     }
                     .sheet(isPresented: $isEditViewPresented) {
-                        controller.refresh()
+                        Task {
+                            await controller.refresh()
+                        }
                     } content: {
                         AnimeEditView(id, anime.myListStatus, anime.title, anime.numEpisodes, $isEditViewPresented)
                     }

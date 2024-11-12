@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class PersonDetailsViewController: ObservableObject {
     @Published var person: Person?
     @Published var isLoading = true
@@ -16,41 +17,32 @@ class PersonDetailsViewController: ObservableObject {
     
     init(_ id: Int) {
         self.id = id
-        networker.getPersonDetails(id: id) { data, error in
-            if let data = data {
-                self.person = data.data
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for voice in data.data.voices {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(voice.anime.id)", urlString: voice.anime.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+        Task {
+            do {
+                let person = try await networker.getPersonDetails(id: id)
+                self.person = person
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for voice in person.voices {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(voice.anime.id)", urlString: voice.anime.images?.jpg.imageUrl)
                         }
                     }
-                    for anime in data.data.anime {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.anime.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+                    for anime in person.anime {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.anime.images?.jpg.imageUrl)
                         }
                     }
-                    for manga in data.data.manga {
-                        group.enter()
-                        self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.manga.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+                    for manga in person.manga {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.manga.images?.jpg.imageUrl)
                         }
                     }
-                    group.notify(queue: .main, execute: {
-                       DispatchQueue.main.async {
-                           self.isLoading = false
-                       }
-                   })
                 }
-                return
-            } else {
-                DispatchQueue.main.async {
-                    self.isLoadingError = true
-                    self.isLoading = false
-                }
+                
+                isLoading = false
+            } catch {
+                isLoading = false
+                isLoadingError = true
             }
         }
     }

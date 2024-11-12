@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 class CharacterDetailsViewController: ObservableObject {
     @Published var character: Character?
     @Published var isLoading = true
@@ -16,41 +17,33 @@ class CharacterDetailsViewController: ObservableObject {
     
     init(_ id: Int) {
         self.id = id
-        networker.getCharacterDetails(id: id) { data, error in
-            if let data = data {
-                self.character = data.data
-                DispatchQueue.global().async {
-                    let group = DispatchGroup()
-                    for anime in data.data.anime {
-                        group.enter()
-                        self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.anime.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+        Task {
+            do {
+                let character = try await networker.getCharacterDetails(id: id)
+                self.character = character
+
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for anime in character.anime {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.anime.images?.jpg.imageUrl)
                         }
                     }
-                    for manga in data.data.manga {
-                        group.enter()
-                        self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.manga.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+                    for manga in character.manga {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.manga.images?.jpg.imageUrl)
                         }
                     }
-                    for voice in data.data.voices {
-                        group.enter()
-                        self.networker.downloadImage(id: "person\(voice.id)", urlString: voice.person.images?.jpg.imageUrl) { data, error in
-                            group.leave()
+                    for voice in character.voices {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "person\(voice.id)", urlString: voice.person.images?.jpg.imageUrl)
                         }
                     }
-                    group.notify(queue: .main, execute: {
-                       DispatchQueue.main.async {
-                           self.isLoading = false
-                       }
-                   })
                 }
-                return
-            } else {
-                DispatchQueue.main.async {
-                    self.isLoadingError = true
-                    self.isLoading = false
-                }
+                
+                isLoading = false
+            } catch {
+                isLoading = false
+                isLoadingError = true
             }
         }
     }
