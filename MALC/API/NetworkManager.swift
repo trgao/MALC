@@ -22,7 +22,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     private let jikanBaseApi = "https://api.jikan.moe/v4"
     private let malBaseApi = "https://api.myanimelist.net/v2"
     private let decoder: JSONDecoder
-    private let client_id = Bundle.main.infoDictionary?["API_CLIENT_ID"] as! String
+    private let clientId = Bundle.main.infoDictionary?["API_CLIENT_ID"] as! String
     private let keychain = Keychain(service: "mal-api")
     private let dateFormatter = ISO8601DateFormatter()
     
@@ -72,9 +72,9 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     // Get access token when user is signing in for the first time
-    private func getAccessToken(_ code: String, _ codeVerifier: String) async throws -> Void {
+    private func getAccessToken(_ code: String, _ codeVerifier: String) async throws -> String {
         let url = URL(string: "https://myanimelist.net/v1/oauth2/token")!
-        let parameters: Data = "client_id=\(client_id)&code=\(code)&code_verifier=\(codeVerifier)&grant_type=authorization_code".data(using: .utf8)!
+        let parameters: Data = "client_id=\(clientId)&code=\(code)&code_verifier=\(codeVerifier)&grant_type=authorization_code".data(using: .utf8)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
@@ -97,6 +97,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 self.keychain["accessToken"] = responseObject.accessToken
                 self.keychain["refreshToken"] = responseObject.refreshToken
             }
+            return responseObject.accessToken
         } catch {
             throw NetworkError.jsonParseFailure
         }
@@ -108,7 +109,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             throw NetworkError.invalidRefreshToken
         }
         let url = URL(string: "https://myanimelist.net/v1/oauth2/token")!
-        let parameters: Data = "client_id=\(client_id)&grant_type=refresh_token&refresh_token=\(token)".data(using: .utf8)!
+        let parameters: Data = "client_id=\(clientId)&grant_type=refresh_token&refresh_token=\(token)".data(using: .utf8)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
@@ -142,7 +143,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     
     // Sign in function with old completion handler syntax
     private func signInWithCompletion(_ pkce: String, completion: @escaping (Result<String, NetworkError>) -> Void) {
-        let session = ASWebAuthenticationSession(url: URL(string: "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=\(client_id)&code_challenge=\(pkce)")!, callbackURLScheme: "malc") { callbackURL, error in
+        let session = ASWebAuthenticationSession(url: URL(string: "https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=\(clientId)&code_challenge=\(pkce)")!, callbackURLScheme: "malc") { callbackURL, error in
             if let error = error {
                 DispatchQueue.main.async {
                     completion(.failure(.unknownError(error)))
@@ -176,12 +177,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 }
             }
         }
-        try await getAccessToken(token, pkce)
-        let user = try await getUserProfile()
-        DispatchQueue.main.async {
-            self.isSignedIn = true
-            self.user = user
-        }
+        let accessToken = try await getAccessToken(token, pkce)
+        self.isSignedIn = true
+        let user = try await getUserProfile(accessToken)
+        self.user = user
+        await downloadImage(id: "userImage", urlString: user.picture)
     }
 
     // Sign out user
@@ -194,14 +194,19 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     // Generic MALApi GET request
-    private func getMALResponse<T: Codable>(urlExtend: String, type: T.Type) async throws -> T {
+    private func getMALResponse<T: Codable>(urlExtend: String, type: T.Type, _ retries: Int = 3) async throws -> T {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
         let url = URL(string: malBaseApi + urlExtend)!
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = [
-            "X-MAL-CLIENT-ID": client_id
+            "X-MAL-CLIENT-ID": clientId
         ]
+        var hasToken = false
         if let token = keychain["accessToken"] {
             config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+            hasToken = true
         }
         let session = URLSession(configuration: config)
         let (data, response) = try await session.data(for: URLRequest(url: url))
@@ -209,10 +214,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
         }
-            
-        guard httpResponse.statusCode != 401 else {
+        
+        // Retry refreshing the token a fixed number of times
+        if httpResponse.statusCode == 401 && hasToken {
             try await refreshToken()
-            return try await getMALResponse(urlExtend: urlExtend, type: type)
+            return try await getMALResponse(urlExtend: urlExtend, type: type, retries - 1)
         }
             
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -253,14 +259,19 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     // Delete anime or manga from user list
-    private func deleteItem(id: Int, type: TypeEnum) async throws -> Void {
+    private func deleteItem(id: Int, type: TypeEnum, _ retries: Int = 3) async throws -> Void {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
         let url = URL(string: malBaseApi + "/\(type)/\(id)/my_list_status")!
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
+        var hasToken = false
         if let token = keychain["accessToken"] {
             request.allHTTPHeaderFields = [
                 "Authorization": "Bearer \(token)"
             ]
+            hasToken = true
         }
 
         let (_, response) = try await URLSession.shared.data(for: request)
@@ -268,10 +279,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
         }
-            
-        guard httpResponse.statusCode != 401 else {
+        
+        // Retry refreshing the token a fixed number of times
+        if httpResponse.statusCode == 401 && hasToken {
             try await refreshToken()
-            return try await deleteItem(id: id, type: type)
+            return try await deleteItem(id: id, type: type, retries - 1)
         }
             
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -281,17 +293,22 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         print("deleted successfully")
     }
     
-    func editUserAnime(id: Int, listStatus: AnimeListStatus) async throws -> Void {
+    func editUserAnime(id: Int, listStatus: AnimeListStatus, _ retries: Int = 3) async throws -> Void {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
         let url = URL(string: malBaseApi + "/anime/\(id)/my_list_status")!
         let parameters: Data = "status=\(listStatus.status!.toParameter())&score=\(listStatus.score)&num_watched_episodes=\(listStatus.numEpisodesWatched)".data(using: .utf8)!
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
         request.httpBody = parameters
+        var hasToken = false
         if let token = keychain["accessToken"] {
             request.allHTTPHeaderFields = [
                 "Authorization": "Bearer \(token)"
             ]
+            hasToken = true
         }
 
         let (_, response) = try await URLSession.shared.data(for: request)
@@ -299,10 +316,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
         }
-            
-        guard httpResponse.statusCode != 401 else {
+        
+        // Retry refreshing the token a fixed number of times
+        if httpResponse.statusCode == 401 && hasToken {
             try await refreshToken()
-            return try await editUserAnime(id: id, listStatus: listStatus)
+            return try await editUserAnime(id: id, listStatus: listStatus, retries - 1)
         }
             
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -312,26 +330,34 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         print("edited successfully")
     }
     
-    func editUserManga(id: Int, listStatus: MangaListStatus) async throws -> Void {
+    func editUserManga(id: Int, listStatus: MangaListStatus, _ retries: Int = 3) async throws -> Void {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
         let url = URL(string: malBaseApi + "/manga/\(id)/my_list_status")!
         let parameters: Data = "status=\(listStatus.status!.toParameter())&score=\(listStatus.score)&num_volumes_read=\(listStatus.numVolumesRead)&num_chapters_read=\(listStatus.numChaptersRead)".data(using: .utf8)!
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
         request.httpBody = parameters
-        request.allHTTPHeaderFields = [
-            "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
-        ]
+        var hasToken = false
+        if let token = keychain["accessToken"] {
+            request.allHTTPHeaderFields = [
+                "Authorization": "Bearer \(token)"
+            ]
+            hasToken = true
+        }
 
         let (_, response) = try await URLSession.shared.data(for: request)
             
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
         }
-            
-        guard httpResponse.statusCode != 401 else {
+        
+        // Retry refreshing the token a fixed number of times
+        if httpResponse.statusCode == 401 && hasToken {
             try await refreshToken()
-            return try await editUserManga(id: id, listStatus: listStatus)
+            return try await editUserManga(id: id, listStatus: listStatus, retries - 1)
         }
             
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -341,9 +367,49 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         print("edited successfully")
     }
     
-    func getUserProfile() async throws -> User {
-        let response = try await getMALResponse(urlExtend: "/users/@me", type: User.self)
-        return response
+    func getUserProfile(_ token: String? = nil, _ retries: Int = 3) async throws -> User {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
+        let url = URL(string: malBaseApi + "/users/@me")!
+        let config = URLSessionConfiguration.default
+        config.httpAdditionalHeaders = [
+            "X-MAL-CLIENT-ID": clientId
+        ]
+        var hasToken = false
+        if let token = keychain["accessToken"] {
+            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+            hasToken = true
+        } else if let token = token {
+            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+            hasToken = true
+        }
+        let session = URLSession(configuration: config)
+        let (data, response) = try await session.data(for: URLRequest(url: url))
+            
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
+        }
+            
+        if httpResponse.statusCode == 401 && hasToken {
+            try await refreshToken()
+            return try await getUserProfile(token, retries - 1)
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 404 {
+                throw NetworkError.notFound
+            } else {
+                throw NetworkError.badStatusCode(httpResponse.statusCode)
+            }
+        }
+            
+        do {
+            let user = try decoder.decode(User.self, from: data)
+            return user
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
     }
     
     func getUserAnimeList(page: Int, status: StatusEnum, sort: String) async throws -> [MALListAnime] {

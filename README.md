@@ -17,10 +17,6 @@ Used the MyAnimeList and Jikan API.
 
 ## Things to be done
 
-* Fix excessive loading screens
-* Add debouncing to buttons to prevent user from spamming
-* Fix duplicate errors on season screen
-* Fix search page and syncing with isSignedIn
 * Refactor alert messages when there is network error / authentication errors
 * Add settings page for customisation and fix user profile
 * Add swiping gestures on list page
