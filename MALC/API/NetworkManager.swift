@@ -10,13 +10,15 @@ import SwiftUI
 import AuthenticationServices
 import KeychainAccess
 
+@MainActor
 class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     @Published var isSignedIn = false
     @Published var user: User?
     static var shared = NetworkManager()
     let imageCache = NSCache<NSString, ImageCache>()
     var imageUrlMap = ThreadSafeDictionary<String, String>()
-    private var defaultSession = URLSession(configuration: URLSessionConfiguration.default)
+    let animeCache = ItemCache<Int, AnimeDetails>()
+    let mangaCache = ItemCache<Int, MangaDetails>()
     private let jikanBaseApi = "https://api.jikan.moe/v4"
     private let malBaseApi = "https://api.myanimelist.net/v2"
     private let decoder: JSONDecoder
@@ -50,6 +52,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             }
             return date_
         })
+        
         super.init()
         
         // Check if user is currently signed in and retrieve user profile
@@ -195,9 +198,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         let url = URL(string: malBaseApi + urlExtend)!
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = [
-            "X-MAL-CLIENT-ID": client_id,
-            "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
+            "X-MAL-CLIENT-ID": client_id
         ]
+        if let token = keychain["accessToken"] {
+            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+        }
         let session = URLSession(configuration: config)
         let (data, response) = try await session.data(for: URLRequest(url: url))
             
@@ -229,7 +234,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     // Generic JikanAPI GET request
     private func getJikanResponse<T: Codable>(urlExtend: String, type: T.Type) async throws -> T {
         let url = URL(string: jikanBaseApi + urlExtend)!
-        let (data, response) = try await defaultSession.data(for: URLRequest(url: url))
+        let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
             
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
@@ -252,9 +257,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         let url = URL(string: malBaseApi + "/\(type)/\(id)/my_list_status")!
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.allHTTPHeaderFields = [
-            "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
-        ]
+        if let token = keychain["accessToken"] {
+            request.allHTTPHeaderFields = [
+                "Authorization": "Bearer \(token)"
+            ]
+        }
 
         let (_, response) = try await URLSession.shared.data(for: request)
             
@@ -281,9 +288,11 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         request.httpMethod = "PATCH"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField:"Content-Type")
         request.httpBody = parameters
-        request.allHTTPHeaderFields = [
-            "Authorization": "Bearer \(keychain["accessToken"] ?? "")"
-        ]
+        if let token = keychain["accessToken"] {
+            request.allHTTPHeaderFields = [
+                "Authorization": "Bearer \(token)"
+            ]
+        }
 
         let (_, response) = try await URLSession.shared.data(for: request)
         
@@ -462,7 +471,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     
     // Download image
     private func download(id: String, imageUrl: URL) async throws -> Void {
-        let (localUrl, response) = try await defaultSession.download(for: URLRequest(url: imageUrl))
+        let (localUrl, response) = try await URLSession.shared.download(for: URLRequest(url: imageUrl))
             
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.badResponse
@@ -507,21 +516,5 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         return ASPresentationAnchor()
-    }
-}
-
-class ImageCache: NSObject, NSDiscardableContent {
-    public var image: NSData!
-
-    func beginContentAccess() -> Bool {
-        return true
-    }
-
-    func endContentAccess() {}
-
-    func discardContentIfPossible() {}
-
-    func isContentDiscarded() -> Bool {
-        return false
     }
 }

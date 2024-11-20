@@ -14,6 +14,7 @@ struct AnimeDetailsView: View {
     @State private var isShowingMore = false
     @State private var isShowingSafariView = false
     @State private var isEditViewPresented = false
+    @State private var isRefresh = false
     private let id: Int
     private let url: URL
     let networker = NetworkManager.shared
@@ -59,7 +60,7 @@ struct AnimeDetailsView: View {
                         .bold()
                         .font(.system(size: 25))
                         VStack {
-                            Text("\(anime.mediaType == "tv" || anime.mediaType == "ova" || anime.mediaType == "ona" ? anime.mediaType.uppercased() : anime.mediaType.capitalized) ・ \(anime.status.replacingOccurrences(of: "_", with: " ").capitalized)")
+                            Text("\(anime.mediaType == "tv" || anime.mediaType == "ova" || anime.mediaType == "ona" ? anime.mediaType.uppercased() : anime.mediaType.replacingOccurrences(of: "_", with: " ").capitalized) ・ \(anime.status.replacingOccurrences(of: "_", with: " ").capitalized)")
                             Text("\(anime.numEpisodes == 0 ? "?" : String(anime.numEpisodes)) episodes, \((anime.averageEpisodeDuration == 0 || anime.averageEpisodeDuration == nil) ? "?" : String(anime.averageEpisodeDuration! / 60)) minutes")
                         }
                         .opacity(0.7)
@@ -72,8 +73,14 @@ struct AnimeDetailsView: View {
                         AnimeInformationBox(anime)
                     }
                 }
+                .task(id: isRefresh) {
+                    if isRefresh {
+                        await controller.refresh()
+                        isRefresh = false
+                    }
+                }
                 .refreshable {
-                    await controller.refresh()
+                    isRefresh = true
                 }
             }
             if controller.isLoading {
