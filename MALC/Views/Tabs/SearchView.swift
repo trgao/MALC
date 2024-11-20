@@ -9,11 +9,10 @@ import SwiftUI
 import SimpleToast
 
 struct SearchView: View {
-    @EnvironmentObject var appState: AppState
     @StateObject private var controller = SearchViewController()
     @StateObject var networker = NetworkManager.shared
     @State private var isPresented = false
-    @State private var viewId = UUID()
+    @State private var isRefresh = false
     @DebouncedState private var searchText = ""
     
     var body: some View {
@@ -57,7 +56,7 @@ struct SearchView: View {
                         }
                     }
                 } else {
-                    if controller.isPageLoading && appState.isSearchViewFirstLoad {
+                    if controller.isPageLoading && !isRefresh {
                         LoadingView()
                     } else {
                         ZStack {
@@ -195,23 +194,21 @@ struct SearchView: View {
                                     }
                                 }
                             }
-                            if controller.isPageLoading && appState.isSearchViewRefresh {
+                            if controller.isPageLoading && isRefresh {
                                 LoadingView()
                             }
                         }
                     }
                 }
             }
-            .task(id: viewId) {
-                if appState.isSearchViewFirstLoad || appState.isSearchViewRefresh {
+            .task(id: isRefresh) {
+                if controller.isPageEmpty() || isRefresh {
                     await controller.refresh()
-                    appState.isSearchViewFirstLoad = false
-                    appState.isSearchViewRefresh = false
+                    isRefresh = false
                 }
             }
             .refreshable {
-                viewId = .init()
-                appState.isSearchViewRefresh = true
+                isRefresh = true
             }
             .searchable_ios16(text: $searchText, isPresented: $isPresented, prompt: "Search MAL")
             .task(id: searchText) {

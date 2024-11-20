@@ -11,7 +11,6 @@ enum NetworkError: Error {
     case badStatusCode(_ statusCode: Int)
     case badData
     case badLocalUrl
-//    case noImage
     case invalidRefreshToken
     case jsonParseFailure
     case unknownError(_ error: Error)
@@ -23,7 +22,6 @@ enum NetworkError: Error {
             case let .badStatusCode(statusCode): return "Request failed \(statusCode)"
             case .badData: return "Data is not of correct type"
             case .badLocalUrl: return "Bad local url of image"
-    //        case .noImage
             
             case .invalidRefreshToken: return "Refresh token is no longer valid"
             case .jsonParseFailure: return "Error parsing json"

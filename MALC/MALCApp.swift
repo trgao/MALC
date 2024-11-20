@@ -10,11 +10,9 @@ import SimpleToast
 
 @main
 struct MALCApp: App {
-    @StateObject var appState = AppState()
     var body: some Scene {
         WindowGroup {
             MainView()
-                .environmentObject(appState)
         }
     }
 }

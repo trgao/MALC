@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct YearPicker: View {
-    @EnvironmentObject var appState: AppState
     @StateObject var controller: SeasonsViewController
     @State private var year = Calendar(identifier: .gregorian).dateComponents([.year], from: .now).year ?? 2001
     private let currentYear = Calendar(identifier: .gregorian).dateComponents([.year], from: .now).year ?? 2001
@@ -19,23 +18,19 @@ struct YearPicker: View {
     
     var body: some View {
         Menu {
-            Picker(selection: $appState.year, label: EmptyView()) {
+            Picker(selection: $controller.year, label: EmptyView()) {
                 ForEach((1917...currentYear + 1).reversed(), id: \.self) { year in
                     Text(String(year)).tag(String(year))
                 }
             }
-            .task(id: appState.year) {
-                if appState.year != year {
-                    year = appState.year
-                    await controller.changeYear(appState.year)
+            .onChange(of: controller.year) { _ in
+                Task {
+                    await controller.refresh(true)
                 }
             }
         } label: {
-            Button(String(appState.year)) {}
+            Button(String(controller.year)) {}
                 .buttonStyle(.borderedProminent)
-        }
-        .onAppear {
-            self.year = appState.year
         }
     }
 }

@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct ListFilter: View {
-    @EnvironmentObject var appState: AppState
     @StateObject var controller: MyListViewController
     
     init(_ controller: MyListViewController) {

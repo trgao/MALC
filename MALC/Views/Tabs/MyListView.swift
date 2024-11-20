@@ -9,7 +9,6 @@ import SwiftUI
 import SimpleToast
 
 struct MyListView: View {
-    @EnvironmentObject var appState: AppState
     @ObservedObject private var controller = MyListViewController()
     @StateObject private var networker = NetworkManager.shared
     @State private var viewId = UUID()
@@ -84,7 +83,11 @@ struct MyListView: View {
                         ListFilter(controller)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        AnimeMangaToggle($controller.type, { await controller.refresh() })
+                        AnimeMangaToggle($controller.type, {
+                            if controller.type == .anime && controller.animeItems.isEmpty || controller.type == .manga && controller.mangaItems.isEmpty {
+                                await controller.refresh()
+                            }
+                        })
                     }
                 }
                 .navigationTitle(controller.type == .anime ? "My Anime List" : "My Manga List")

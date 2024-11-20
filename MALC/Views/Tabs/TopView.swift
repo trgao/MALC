@@ -9,13 +9,12 @@ import SwiftUI
 import SimpleToast
 
 struct TopView: View {
-    @EnvironmentObject var appState: AppState
     @StateObject private var controller = TopViewController()
     private let columns: [GridItem] = [
         GridItem(.adaptive(minimum: 150), alignment: .top),
     ]
     @State private var offset: CGFloat = -18
-    @State private var viewId = UUID()
+    @State private var isRefresh = false
     let networker = NetworkManager.shared
     
     private func rankToString(_ rank: Int?) -> String {
@@ -28,6 +27,10 @@ struct TopView: View {
         } else {
             return String(rank!)
         }
+    }
+    
+    private func isItemsEmpty() -> Bool {
+        return (controller.type == .anime && controller.animeItems.isEmpty) || (controller.type == .manga && controller.mangaItems.isEmpty)
     }
     
     var body: some View {
@@ -61,7 +64,7 @@ struct TopView: View {
                 if controller.isLoading {
                     LoadingView()
                 }
-                if (controller.type == .anime && controller.animeItems.isEmpty && !controller.isLoading) || (controller.type == .manga && controller.mangaItems.isEmpty && !controller.isLoading) {
+                if isItemsEmpty() && !controller.isLoading {
                     VStack {
                         Image(systemName: "medal")
                             .resizable()
@@ -72,18 +75,20 @@ struct TopView: View {
                 }
             }
             .toolbar {
-                AnimeMangaToggle($controller.type, controller.refresh)
+                AnimeMangaToggle($controller.type, {
+                    if isItemsEmpty() {
+                        await controller.refresh()
+                    }
+                })
             }
-            .task(id: viewId) {
-                if appState.isTopViewFirstLoad || appState.isTopViewRefresh {
+            .task(id: isRefresh) {
+                if isItemsEmpty() || isRefresh {
                     await controller.refresh()
-                    appState.isTopViewFirstLoad = false
-                    appState.isTopViewRefresh = false
+                    isRefresh = false
                 }
             }
             .refreshable {
-                viewId = .init()
-                appState.isTopViewRefresh = true
+                isRefresh = true
             }
             .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
                 Text("Unable to load")

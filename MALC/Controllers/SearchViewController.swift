@@ -24,61 +24,68 @@ class SearchViewController: ObservableObject {
     private var canLoadMorePages = true
     let networker = NetworkManager.shared
     
+    func isPageEmpty() -> Bool {
+        return (networker.isSignedIn && animeSuggestions.isEmpty) || topAiringAnime.isEmpty || topUpcomingAnime.isEmpty || topPopularAnime.isEmpty || topPopularManga.isEmpty
+    }
+    
     func refresh() async -> Void {
-        isPageLoading = true
-        isLoadingError = false
-        do {
-            var animeSuggestions: [MALListAnime] = []
-            if networker.isSignedIn {
-                animeSuggestions = try await networker.getUserAnimeSuggestionList()
+        let task = Task {
+            isPageLoading = true
+            isLoadingError = false
+            do {
+                var animeSuggestions: [MALListAnime] = []
+                if networker.isSignedIn {
+                    animeSuggestions = try await networker.getUserAnimeSuggestionList()
+                }
+                let topAiringAnime = try await networker.getAnimeTopAiringList()
+                let topUpcomingAnime = try await networker.getAnimeTopUpcomingList()
+                let topPopularAnime = try await networker.getAnimeTopPopularList()
+                let topPopularManga = try await networker.getMangaTopPopularList()
+                self.animeSuggestions = animeSuggestions
+                self.topAiringAnime = topAiringAnime
+                self.topUpcomingAnime = topUpcomingAnime
+                self.topPopularAnime = topPopularAnime
+                self.topPopularManga = topPopularManga
+                
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for anime in animeSuggestions {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                        }
+                    }
+                    
+                    for anime in topAiringAnime {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                        }
+                    }
+                    
+                    for anime in topUpcomingAnime {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                        }
+                    }
+                    
+                    for anime in topPopularAnime {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                        }
+                    }
+                    
+                    for manga in topPopularManga {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                        }
+                    }
+                }
+                
+                isPageLoading = false
+            } catch {
+                isPageLoading = false
+                isLoadingError = true
             }
-            let topAiringAnime = try await networker.getAnimeTopAiringList()
-            let topUpcomingAnime = try await networker.getAnimeTopUpcomingList()
-            let topPopularAnime = try await networker.getAnimeTopPopularList()
-            let topPopularManga = try await networker.getMangaTopPopularList()
-            self.animeSuggestions = animeSuggestions
-            self.topAiringAnime = topAiringAnime
-            self.topUpcomingAnime = topUpcomingAnime
-            self.topPopularAnime = topPopularAnime
-            self.topPopularManga = topPopularManga
-            
-            await withTaskGroup(of: Void.self) { taskGroup in
-                for anime in animeSuggestions {
-                    taskGroup.addTask {
-                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
-                    }
-                }
-                
-                for anime in topAiringAnime {
-                    taskGroup.addTask {
-                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
-                    }
-                }
-                
-                for anime in topUpcomingAnime {
-                    taskGroup.addTask {
-                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
-                    }
-                }
-                
-                for anime in topPopularAnime {
-                    taskGroup.addTask {
-                        await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
-                    }
-                }
-                
-                for manga in topPopularManga {
-                    taskGroup.addTask {
-                        await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
-                    }
-                }
-            }
-                
-            isPageLoading = false
-        } catch {
-            isPageLoading = false
-            isLoadingError = true
         }
+        await task.value
     }
     
     func search(_ title: String) async -> Void {
@@ -91,6 +98,7 @@ class SearchViewController: ObservableObject {
         do {
             if type == .anime {
                 let animeList = try await networker.searchAnime(anime: title, page: currentPage)
+                print(animeList.map{ $0.node.title })
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for anime in animeList {
                         taskGroup.addTask {
@@ -102,7 +110,7 @@ class SearchViewController: ObservableObject {
                 currentPage = 2
                 canLoadMorePages = !(animeList.isEmpty)
                 animeItems = animeList
-                isPageLoading = false
+                isSearchLoading = false
             } else {
                 let mangaList = try await networker.searchManga(manga: title, page: currentPage)
                 await withTaskGroup(of: Void.self) { taskGroup in
@@ -116,10 +124,10 @@ class SearchViewController: ObservableObject {
                 currentPage = 2
                 canLoadMorePages = !(mangaList.isEmpty)
                 mangaItems = mangaList
-                isPageLoading = false
+                isSearchLoading = false
             }
         } catch {
-            isPageLoading = false
+            isSearchLoading = false
             isLoadingError = true
         }
     }
@@ -135,6 +143,7 @@ class SearchViewController: ObservableObject {
         do {
             if type == .anime {
                 let animeList = try await networker.searchAnime(anime: title, page: currentPage)
+                print(animeList.map{ $0.node.title })
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for anime in animeList {
                         taskGroup.addTask {
@@ -146,7 +155,7 @@ class SearchViewController: ObservableObject {
                 currentPage += 1
                 canLoadMorePages = !(animeList.isEmpty)
                 animeItems.append(contentsOf: animeList)
-                isPageLoading = false
+                isSearchLoading = false
             } else {
                 let mangaList = try await networker.searchManga(manga: title, page: currentPage)
                 await withTaskGroup(of: Void.self) { taskGroup in
@@ -160,10 +169,11 @@ class SearchViewController: ObservableObject {
                 currentPage += 1
                 canLoadMorePages = !(mangaList.isEmpty)
                 mangaItems.append(contentsOf: mangaList)
-                isPageLoading = false
+                isSearchLoading = false
             }
-        } catch {
-            isPageLoading = false
+        } catch let error {
+            print(error)
+            isSearchLoading = false
             isLoadingError = true
         }
     }

@@ -55,13 +55,6 @@ struct SignInOutBox: View {
                         .padding([.bottom], 10)
                     Button("Sign In") {
                         signIn()
-//                        isAuthenticating = true
-//                        networker.signIn() { error in
-//                            isAuthenticating = false
-//                            if let error, !isCancelledLoginError(error) {
-//                                isAuthenticatingError = true
-//                            }
-//                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }

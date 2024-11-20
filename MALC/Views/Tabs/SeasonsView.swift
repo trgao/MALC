@@ -9,23 +9,18 @@ import SwiftUI
 import SimpleToast
 
 struct SeasonsView: View {
-    @EnvironmentObject var appState: AppState
-    @StateObject private var controller: SeasonsViewController
-    @State private var viewId = UUID()
+    @StateObject private var controller = SeasonsViewController()
+    @State private var isRefresh = false
     private let columns: [GridItem] = [
         GridItem(.adaptive(minimum: 150), alignment: .top),
     ]
     let networker = NetworkManager.shared
     
-    init(_ controller: SeasonsViewController) {
-        self._controller = StateObject(wrappedValue: controller)
-    }
-    
     var body: some View {
         NavigationStack {
             ZStack {
                 ScrollView {
-                    if appState.season == "winter" {
+                    if controller.season == "winter" {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.winterItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -34,7 +29,7 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else if appState.season == "spring" {
+                    } else if controller.season == "spring" {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.springItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -43,7 +38,7 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else if appState.season == "summer" {
+                    } else if controller.season == "summer" {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.summerItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -52,7 +47,7 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else {
+                    } else if controller.season == "fall" {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.fallItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -67,16 +62,14 @@ struct SeasonsView: View {
                         .foregroundColor(.clear)
                 }
                 .navigationTitle("Seasons")
-                .task(id: viewId) {
-                    if appState.isSeasonsViewFirstLoad || appState.isSeasonsViewRefresh {
+                .task(id: isRefresh) {
+                    if controller.isSeasonEmpty() || isRefresh {
                         await controller.refresh()
-                        appState.isSeasonsViewFirstLoad = false
-                        appState.isSearchViewRefresh = false
+                        isRefresh = false
                     }
                 }
                 .refreshable {
-                    viewId = .init()
-                    appState.isSeasonsViewRefresh = true
+                    isRefresh = true
                 }
                 .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
                     Text("Unable to load")
@@ -87,13 +80,13 @@ struct SeasonsView: View {
                 }
                 .toolbar {
                     YearPicker(controller)
-                        .disabled(controller.currentSeasonLoading())
+                        .disabled(controller.isLoading)
                 }
                 SeasonPicker(controller)
-                if controller.currentSeasonLoading() {
+                if controller.isLoading {
                     LoadingView()
                 }
-                if (appState.season == "winter" && controller.winterItems.isEmpty && !controller.isWinterLoading) || (appState.season == "spring" && controller.springItems.isEmpty && !controller.isSpringLoading) || (appState.season == "summer" && controller.summerItems.isEmpty && !controller.isSummerLoading) || (appState.season == "fall" && controller.fallItems.isEmpty && !controller.isFallLoading)  {
+                if controller.isSeasonEmpty() && !controller.isLoading  {
                     VStack {
                         Image(systemName: "calendar")
                             .resizable()

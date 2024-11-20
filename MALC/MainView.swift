@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct MainView: View {
-    @EnvironmentObject var appState: AppState
-    
     init() {
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
@@ -27,7 +25,7 @@ struct MainView: View {
                 .tabItem {
                     Label("Top", systemImage: "medal")
                 }
-            SeasonsView(SeasonsViewController(appState))
+            SeasonsView()
                 .tabItem {
                     Label("Seasons", systemImage: "calendar")
                 }

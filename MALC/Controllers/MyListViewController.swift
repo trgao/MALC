@@ -11,7 +11,7 @@ import Foundation
 class MyListViewController: ObservableObject {
     @Published var animeItems = [MALListAnime]()
     @Published var mangaItems = [MALListManga]()
-    @Published var isLoading = false
+    @Published var isLoading = true
     @Published var isLoadingError = false
     @Published var type: TypeEnum = .anime
     @Published var animeStatus: StatusEnum = .completed
@@ -23,51 +23,54 @@ class MyListViewController: ObservableObject {
     let networker = NetworkManager.shared
     
     func refresh(_ clear: Bool = false) async -> Void {
-        currentPage = 1
-        canLoadMorePages = true
-        isLoading = true
-        isLoadingError = false
-        if clear {
-            if type == .anime {
-                animeItems = []
-            } else if type == .manga {
-                mangaItems = []
+        let task = Task {
+            currentPage = 1
+            canLoadMorePages = true
+            isLoading = true
+            isLoadingError = false
+            if clear {
+                if type == .anime {
+                    animeItems = []
+                } else if type == .manga {
+                    mangaItems = []
+                }
             }
-        }
-        do {
-            if type == .anime {
-                let animeList = try await networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort)
-                await withTaskGroup(of: Void.self) { taskGroup in
-                    for anime in animeList {
-                        taskGroup.addTask {
-                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+            do {
+                if type == .anime {
+                    let animeList = try await networker.getUserAnimeList(page: currentPage, status: animeStatus, sort: animeSort)
+                    await withTaskGroup(of: Void.self) { taskGroup in
+                        for anime in animeList {
+                            taskGroup.addTask {
+                                await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                            }
                         }
                     }
-                }
-
-                currentPage = 2
-                canLoadMorePages = !(animeList.isEmpty)
-                animeItems = animeList
-                isLoading = false
-            } else {
-                let mangaList = try await networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort)
-                await withTaskGroup(of: Void.self) { taskGroup in
-                    for manga in mangaList {
-                        taskGroup.addTask {
-                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                    
+                    currentPage = 2
+                    canLoadMorePages = !(animeList.isEmpty)
+                    animeItems = animeList
+                    isLoading = false
+                } else {
+                    let mangaList = try await networker.getUserMangaList(page: currentPage, status: mangaStatus, sort: mangaSort)
+                    await withTaskGroup(of: Void.self) { taskGroup in
+                        for manga in mangaList {
+                            taskGroup.addTask {
+                                await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                            }
                         }
                     }
+                    
+                    currentPage = 2
+                    canLoadMorePages = !(mangaList.isEmpty)
+                    mangaItems = mangaList
+                    isLoading = false
                 }
-
-                currentPage = 2
-                canLoadMorePages = !(mangaList.isEmpty)
-                mangaItems = mangaList
+            } catch {
                 isLoading = false
+                isLoadingError = true
             }
-        } catch {
-            isLoading = false
-            isLoadingError = true
         }
+        await task.value
     }
     
     private func loadMore() async -> Void {
