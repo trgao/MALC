@@ -11,7 +11,12 @@ import SimpleToast
 struct MyListView: View {
     @ObservedObject private var controller = MyListViewController()
     @StateObject private var networker = NetworkManager.shared
-    @State private var viewId = UUID()
+    @State private var isRefresh = false
+    @State private var isBack = false
+    
+    private func isItemsEmpty() -> Bool {
+        return (controller.type == .anime && controller.animeItems.isEmpty) || (controller.type == .manga && controller.mangaItems.isEmpty)
+    }
     
     var body: some View {
         NavigationStack {
@@ -21,7 +26,7 @@ struct MyListView: View {
                         if controller.type == .anime {
                             Section(controller.animeStatus.toString()) {
                                 ForEach(controller.animeItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus, { await controller.refresh() })
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.animeStatus, item.node.numEpisodes, item.listStatus, { await controller.refresh() }, $isBack)
                                         .task {
                                             await controller.loadMoreIfNeeded(currentItem: item)
                                         }
@@ -41,7 +46,7 @@ struct MyListView: View {
                         } else if controller.type == .manga {
                             Section(controller.mangaStatus.toString()) {
                                 ForEach(controller.mangaItems, id: \.forEachId) { item in
-                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus, { await controller.refresh() })
+                                    AnimeMangaListItem(item.id, item.node.title, controller.type, controller.mangaStatus, item.node.numVolumes, item.node.numChapters, item.listStatus, { await controller.refresh() }, $isBack)
                                         .task {
                                             await controller.loadMoreIfNeeded(currentItem: item)
                                         }
@@ -68,11 +73,19 @@ struct MyListView: View {
                             .cornerRadius(10)
                     }
                     .refreshable {
-                        await controller.refresh()
+                        isRefresh = true
                     }
-                    .task {
-                        controller.objectWillChange.send()
-                        await controller.refresh()
+                    .task(id: isRefresh) {
+                        if isItemsEmpty() || isRefresh {
+                            await controller.refresh()
+                            isRefresh = false
+                        }
+                    }
+                    .task(id: isBack) {
+                        if isBack {
+                            await controller.refresh()
+                            isBack = false
+                        }
                     }
                     if controller.isLoading {
                         LoadingView()
@@ -84,7 +97,7 @@ struct MyListView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         AnimeMangaToggle($controller.type, {
-                            if controller.type == .anime && controller.animeItems.isEmpty || controller.type == .manga && controller.mangaItems.isEmpty {
+                            if isItemsEmpty() {
                                 await controller.refresh()
                             }
                         })

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AnimeMangaListItem: View {
     @State private var isEditViewPresented = false
+    @Binding private var isBack: Bool
     private let id: Int
     private let title: String?
     private let type: TypeEnum
@@ -42,9 +43,10 @@ struct AnimeMangaListItem: View {
         self.animeListStatus = nil
         self.mangaListStatus = nil
         self.refresh = {}
+        self._isBack = .constant(false)
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?, _ refresh: @escaping () async -> Void) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum, _ status: StatusEnum, _ numEpisodes: Int?, _ animeListStatus: AnimeListStatus?, _ refresh: @escaping () async -> Void, _ isBack: Binding<Bool>) {
         self.id = id
         self.title = title
         self.type = type
@@ -55,9 +57,10 @@ struct AnimeMangaListItem: View {
         self.animeListStatus = animeListStatus
         self.mangaListStatus = nil
         self.refresh = refresh
+        self._isBack = isBack
     }
     
-    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?, _ refresh: @escaping () async -> Void) {
+    init(_ id: Int, _ title: String?, _ type: TypeEnum,  _ status: StatusEnum, _ numVolumes: Int?, _ numChapters: Int?, _ mangaListStatus: MangaListStatus?, _ refresh: @escaping () async -> Void, _ isBack: Binding<Bool>) {
         self.id = id
         self.title = title
         self.type = type
@@ -68,14 +71,27 @@ struct AnimeMangaListItem: View {
         self.animeListStatus = nil
         self.mangaListStatus = mangaListStatus
         self.refresh = refresh
+        self._isBack = isBack
     }
     
     var body: some View {
         NavigationLink {
             if type == .anime {
                 AnimeDetailsView(id)
+                    .onAppear {
+                        isBack = false
+                    }
+                    .onDisappear {
+                        isBack = true
+                    }
             } else {
                 MangaDetailsView(id)
+                    .onAppear {
+                        isBack = false
+                    }
+                    .onDisappear {
+                        isBack = true
+                    }
             }
         } label: {
             HStack {

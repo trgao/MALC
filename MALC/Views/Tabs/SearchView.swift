@@ -14,6 +14,11 @@ struct SearchView: View {
     @State private var isPresented = false
     @State private var isRefresh = false
     @DebouncedState private var searchText = ""
+    @State private var previousSearch = ""
+    
+    private func isItemsEmpty() -> Bool {
+        return (controller.type == .anime && controller.animeItems.isEmpty) || (controller.type == .manga && controller.mangaItems.isEmpty)
+    }
     
     var body: some View {
         NavigationStack {
@@ -26,7 +31,7 @@ struct SearchView: View {
                                 Image(systemName: "book.fill").tag(TypeEnum.manga)
                             }
                             .task(id: controller.type) {
-                                if searchText.count > 2 {
+                                if searchText.count > 2 && isItemsEmpty() {
                                     await controller.search(searchText)
                                 }
                             }
@@ -213,7 +218,9 @@ struct SearchView: View {
             .searchable_ios16(text: $searchText, isPresented: $isPresented, prompt: "Search MAL")
             .task(id: searchText) {
                 if searchText.count > 2 {
-                    await controller.search(searchText)
+                    if isItemsEmpty() {
+                        await controller.search(searchText)
+                    }
                 } else {
                     controller.animeItems = []
                     controller.mangaItems = []

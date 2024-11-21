@@ -98,7 +98,6 @@ class SearchViewController: ObservableObject {
         do {
             if type == .anime {
                 let animeList = try await networker.searchAnime(anime: title, page: currentPage)
-                print(animeList.map{ $0.node.title })
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for anime in animeList {
                         taskGroup.addTask {
@@ -143,7 +142,6 @@ class SearchViewController: ObservableObject {
         do {
             if type == .anime {
                 let animeList = try await networker.searchAnime(anime: title, page: currentPage)
-                print(animeList.map{ $0.node.title })
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for anime in animeList {
                         taskGroup.addTask {
