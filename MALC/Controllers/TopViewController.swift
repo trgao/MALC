@@ -9,77 +9,42 @@ import Foundation
 
 @MainActor
 class TopViewController: ObservableObject {
+    // Anime list variables
     @Published var animeItems = [MALListAnime]()
+    @Published var isAnimeLoading = false
+    private var currentAnimePage = 1
+    private var canLoadMoreAnimePages = true
+    
+    // Manga list variables
     @Published var mangaItems = [MALListManga]()
-    @Published var isLoading = true
+    @Published var isMangaLoading = false
+    private var currentMangaPage = 1
+    private var canLoadMoreMangaPages = true
+    
+    // Common variables
     @Published var isLoadingError = false
     @Published var type: TypeEnum = .anime
-    private var currentPage = 1
-    private var canLoadMorePages = true
     let networker = NetworkManager.shared
     
-    func refresh() async -> Void {
-        let task = Task {
-            currentPage = 1
-            canLoadMorePages = true
-            isLoading = true
-            isLoadingError = false
-            do {
-                if type == .anime {
-                    let animeList = try await networker.getTopAnimeList(page: currentPage)
-                    
-                    await withTaskGroup(of: Void.self) { taskGroup in
-                        for anime in animeList {
-                            taskGroup.addTask {
-                                await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
-                            }
-                        }
-                    }
-                    
-                    currentPage = 2
-                    canLoadMorePages = !(animeList.isEmpty)
-                    animeItems = animeList
-                    isLoading = false
-                } else {
-                    let mangaList = try await networker.getTopMangaList(page: currentPage)
-                    
-                    await withTaskGroup(of: Void.self) { taskGroup in
-                        for manga in mangaList {
-                            taskGroup.addTask {
-                                await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
-                            }
-                        }
-                    }
-                    
-                    currentPage = 2
-                    canLoadMorePages = !(mangaList.isEmpty)
-                    mangaItems = mangaList
-                    isLoading = false
-                }
-            } catch {
-                isLoading = false
-                isLoadingError = true
-            }
-        }
-        await task.value
+    // Check if the current anime/manga list is empty
+    func isItemsEmpty() -> Bool {
+        return (type == .anime && animeItems.isEmpty) || (type == .manga && mangaItems.isEmpty)
     }
     
-    private func loadMore() async -> Void {
-        // only load more when it is not loading and there are more pages to be loaded
-        guard !isLoading && canLoadMorePages else {
-            return
-        }
-        
-        // only load more when there are already items on the page
-        guard (type == .anime && animeItems.count > 0) || (type == .manga && mangaItems.count > 0) else {
-            return
-        }
-        
-        isLoading = true
+    // Check if the current anime/manga list should be refreshed
+    func shouldRefresh() -> Bool {
+        return (type == .anime && animeItems.isEmpty && canLoadMoreAnimePages) || (type == .manga && mangaItems.isEmpty && canLoadMoreMangaPages)
+    }
+    
+    // Refresh the current anime/manga list
+    func refresh() async -> Void {
         isLoadingError = false
-        do {
-            if type == .anime {
-                let animeList = try await networker.getTopAnimeList(page: currentPage)
+        if type == .anime {
+            do {
+                currentAnimePage = 1
+                canLoadMoreAnimePages = true
+                isAnimeLoading = true
+                let animeList = try await networker.getTopAnimeList(page: currentAnimePage)
                 
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for anime in animeList {
@@ -89,12 +54,20 @@ class TopViewController: ObservableObject {
                     }
                 }
                 
-                currentPage += 1
-                canLoadMorePages = !(animeList.isEmpty)
-                animeItems.append(contentsOf: animeList)
-                isLoading = false
-            } else {
-                let mangaList = try await networker.getTopMangaList(page: currentPage)
+                currentAnimePage = 2
+                canLoadMoreAnimePages = !(animeList.isEmpty)
+                animeItems = animeList
+                isAnimeLoading = false
+            } catch {
+                isAnimeLoading = false
+                isLoadingError = true
+            }
+        } else {
+            do {
+                currentMangaPage = 1
+                canLoadMoreMangaPages = true
+                isMangaLoading = true
+                let mangaList = try await networker.getTopMangaList(page: currentMangaPage)
                 
                 await withTaskGroup(of: Void.self) { taskGroup in
                     for manga in mangaList {
@@ -104,17 +77,87 @@ class TopViewController: ObservableObject {
                     }
                 }
                 
-                currentPage += 1
-                canLoadMorePages = !(mangaList.isEmpty)
-                mangaItems.append(contentsOf: mangaList)
-                isLoading = false
+                currentMangaPage = 2
+                canLoadMoreMangaPages = !(mangaList.isEmpty)
+                mangaItems = mangaList
+                isMangaLoading = false
+            } catch {
+                isMangaLoading = false
+                isLoadingError = true
             }
-        } catch {
-            isLoading = false
-            isLoadingError = true
         }
     }
     
+    // Load more of the current anime/manga list
+    private func loadMore() async -> Void {
+        if type == .anime {
+            // only load more when it is not loading and there are more pages to be loaded
+            guard !isAnimeLoading && canLoadMoreAnimePages else {
+                return
+            }
+            
+            // only load more when there are already items on the page
+            guard animeItems.count > 0 else {
+                return
+            }
+            
+            isAnimeLoading = true
+            isLoadingError = false
+            do {
+                let animeList = try await networker.getTopAnimeList(page: currentAnimePage)
+                
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for anime in animeList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "anime\(anime.id)", urlString: anime.node.mainPicture?.medium)
+                        }
+                    }
+                }
+                
+                currentAnimePage += 1
+                canLoadMoreAnimePages = !(animeList.isEmpty)
+                animeItems.append(contentsOf: animeList)
+                isAnimeLoading = false
+            } catch {
+                isAnimeLoading = false
+                isLoadingError = true
+            }
+        } else if type == .manga {
+            // only load more when it is not loading and there are more pages to be loaded
+            guard !isMangaLoading && canLoadMoreMangaPages else {
+                return
+            }
+            
+            // only load more when there are already items on the page
+            guard mangaItems.count > 0 else {
+                return
+            }
+            
+            isMangaLoading = true
+            isLoadingError = false
+            do {
+                let mangaList = try await networker.getTopMangaList(page: currentMangaPage)
+                
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for manga in mangaList {
+                        taskGroup.addTask {
+                            await self.networker.downloadImage(id: "manga\(manga.id)", urlString: manga.node.mainPicture?.medium)
+                        }
+                    }
+                }
+                
+                currentMangaPage += 1
+                canLoadMoreMangaPages = !(mangaList.isEmpty)
+                mangaItems.append(contentsOf: mangaList)
+                isMangaLoading = false
+            } catch {
+                isMangaLoading = false
+                isLoadingError = true
+            }
+        }
+    }
+    
+    // Load more anime when reaching the 5th last anime in list
     func loadMoreIfNeeded(currentItem item: MALListAnime?) async -> Void {
         guard let item = item else {
             return await loadMore()
@@ -125,6 +168,7 @@ class TopViewController: ObservableObject {
         }
     }
     
+    // Load more manga when reaching the 5th last manga in list
     func loadMoreIfNeeded(currentItem item: MALListManga?) async -> Void {
         guard let item = item else {
             return await loadMore()

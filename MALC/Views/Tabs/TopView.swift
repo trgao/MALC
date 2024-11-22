@@ -17,6 +17,7 @@ struct TopView: View {
     @State private var isRefresh = false
     let networker = NetworkManager.shared
     
+    // Display medals instead of numbers for the first 3 ranks
     private func rankToString(_ rank: Int?) -> String {
         if rank == nil {
             return ""
@@ -29,74 +30,86 @@ struct TopView: View {
         }
     }
     
-    private func isItemsEmpty() -> Bool {
-        return (controller.type == .anime && controller.animeItems.isEmpty) || (controller.type == .manga && controller.mangaItems.isEmpty)
-    }
-    
     var body: some View {
         NavigationStack {
-            ZStack {
+            VStack {
                 if controller.type == .anime {
-                    ScrollView {
-                        LazyVGrid(columns: columns) {
-                            ForEach(controller.animeItems, id: \.node.id) { item in
-                                AnimeMangaGridItem(item.node.id, item.node.title, .anime, rankToString(item.ranking?.rank))
-                                    .task {
-                                        await controller.loadMoreIfNeeded(currentItem: item)
-                                    }
+                    ZStack {
+                        ScrollView {
+                            LazyVGrid(columns: columns) {
+                                ForEach(controller.animeItems, id: \.node.id) { item in
+                                    AnimeMangaGridItem(item.node.id, item.node.title, .anime, rankToString(item.ranking?.rank))
+                                        .task {
+                                            await controller.loadMoreIfNeeded(currentItem: item)
+                                        }
+                                }
+                            }
+                        }
+                        .navigationTitle("Top Anime")
+                        if controller.isAnimeLoading {
+                            LoadingView()
+                        }
+                        if controller.isItemsEmpty() && !controller.isAnimeLoading {
+                            VStack {
+                                Image(systemName: "medal")
+                                    .resizable()
+                                    .frame(width: 40, height: 50)
+                                Text("Nothing found. ")
+                                    .bold()
                             }
                         }
                     }
-                    .navigationTitle("Top Anime")
                 } else if controller.type == .manga {
-                    ScrollView {
-                        LazyVGrid(columns: columns) {
-                            ForEach(controller.mangaItems, id: \.node.id) { item in
-                                AnimeMangaGridItem(item.node.id, item.node.title, .manga, rankToString(item.ranking?.rank))
-                                    .task {
-                                        await controller.loadMoreIfNeeded(currentItem: item)
-                                    }
+                    ZStack {
+                        ScrollView {
+                            LazyVGrid(columns: columns) {
+                                ForEach(controller.mangaItems, id: \.node.id) { item in
+                                    AnimeMangaGridItem(item.node.id, item.node.title, .manga, rankToString(item.ranking?.rank))
+                                        .task {
+                                            await controller.loadMoreIfNeeded(currentItem: item)
+                                        }
+                                }
                             }
                         }
-                    }
-                    .navigationTitle("Top Manga")
-                }
-                if controller.isLoading {
-                    LoadingView()
-                }
-                if isItemsEmpty() && !controller.isLoading {
-                    VStack {
-                        Image(systemName: "medal")
-                            .resizable()
-                            .frame(width: 40, height: 50)
-                        Text("Nothing found. ")
-                            .bold()
+                        .navigationTitle("Top Manga")
+                        if controller.isMangaLoading {
+                            LoadingView()
+                        }
+                        if controller.isItemsEmpty() && !controller.isMangaLoading {
+                            VStack {
+                                Image(systemName: "medal")
+                                    .resizable()
+                                    .frame(width: 40, height: 50)
+                                Text("Nothing found. ")
+                                    .bold()
+                            }
+                        }
                     }
                 }
             }
             .toolbar {
                 AnimeMangaToggle($controller.type, {
-                    if isItemsEmpty() {
+                    if controller.isItemsEmpty() {
                         await controller.refresh()
                     }
                 })
             }
-            .task(id: isRefresh) {
-                if isItemsEmpty() || isRefresh {
-                    await controller.refresh()
-                    isRefresh = false
-                }
+        }
+        .task(id: isRefresh) {
+            if controller.shouldRefresh() || isRefresh {
+                await controller.refresh()
+                isRefresh = false
             }
-            .refreshable {
-                isRefresh = true
-            }
-            .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
-                Text("Unable to load")
-                    .padding(20)
-                    .background(.red)
-                    .foregroundStyle(.white)
-                    .cornerRadius(10)
-            }
+        }
+        .refreshable {
+            isRefresh = true
+        }
+        .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+            Text("Unable to load")
+                .padding(20)
+                .background(.red)
+                .foregroundStyle(.white)
+                .cornerRadius(10)
         }
     }
 }

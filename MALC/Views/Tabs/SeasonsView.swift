@@ -19,8 +19,8 @@ struct SeasonsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                ScrollView {
-                    if controller.season == "winter" {
+                if controller.season == "winter" {
+                    ScrollView {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.winterItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -29,7 +29,10 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else if controller.season == "spring" {
+                    }
+                    .navigationTitle("Winter")
+                } else if controller.season == "spring" {
+                    ScrollView {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.springItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -38,7 +41,10 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else if controller.season == "summer" {
+                    }
+                    .navigationTitle("Spring")
+                } else if controller.season == "summer" {
+                    ScrollView {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.summerItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -47,7 +53,10 @@ struct SeasonsView: View {
                                     }
                             }
                         }
-                    } else if controller.season == "fall" {
+                    }
+                    .navigationTitle("Summer")
+                } else if controller.season == "fall" {
+                    ScrollView {
                         LazyVGrid(columns: columns) {
                             ForEach(controller.fallItems) { item in
                                 AnimeMangaGridItem(item.id, item.node.title, .anime)
@@ -57,36 +66,14 @@ struct SeasonsView: View {
                             }
                         }
                     }
-                    Rectangle()
-                        .frame(height: 40)
-                        .foregroundColor(.clear)
-                }
-                .navigationTitle("Seasons")
-                .task(id: isRefresh) {
-                    if controller.isSeasonEmpty() || isRefresh {
-                        await controller.refresh()
-                        isRefresh = false
-                    }
-                }
-                .refreshable {
-                    isRefresh = true
-                }
-                .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
-                    Text("Unable to load")
-                        .padding(20)
-                        .background(.red)
-                        .foregroundStyle(.white)
-                        .cornerRadius(10)
-                }
-                .toolbar {
-                    YearPicker(controller)
-                        .disabled(controller.isLoading)
+                    .navigationTitle("Fall")
                 }
                 SeasonPicker(controller)
-                if controller.isLoading {
+                    .disabled(controller.getCurrentSeasonLoading())
+                if controller.getCurrentSeasonLoading() {
                     LoadingView()
                 }
-                if controller.isSeasonEmpty() && !controller.isLoading  {
+                if controller.isSeasonEmpty() && !controller.getCurrentSeasonLoading()  {
                     VStack {
                         Image(systemName: "calendar")
                             .resizable()
@@ -95,6 +82,26 @@ struct SeasonsView: View {
                             .bold()
                     }
                 }
+            }
+            .task(id: isRefresh) {
+                if controller.shouldRefresh() || isRefresh {
+                    await controller.refresh()
+                    isRefresh = false
+                }
+            }
+            .refreshable {
+                isRefresh = true
+            }
+            .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
+                Text("Unable to load")
+                    .padding(20)
+                    .background(.red)
+                    .foregroundStyle(.white)
+                    .cornerRadius(10)
+            }
+            .toolbar {
+                YearPicker(controller)
+                    .disabled(controller.getCurrentSeasonLoading())
             }
         }
     }

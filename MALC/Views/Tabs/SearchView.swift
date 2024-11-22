@@ -16,48 +16,58 @@ struct SearchView: View {
     @DebouncedState private var searchText = ""
     @State private var previousSearch = ""
     
-    private func isItemsEmpty() -> Bool {
-        return (controller.type == .anime && controller.animeItems.isEmpty) || (controller.type == .manga && controller.mangaItems.isEmpty)
-    }
-    
     var body: some View {
+        // Weird animation bug with list when reaching end and loading more
         NavigationStack {
             ZStack {
                 if isPresented {
-                    ZStack {
-                        VStack {
-                            Picker(selection: $controller.type, label: EmptyView()) {
-                                Image(systemName: "tv.fill").tag(TypeEnum.anime)
-                                Image(systemName: "book.fill").tag(TypeEnum.manga)
-                            }
-                            .task(id: controller.type) {
-                                if searchText.count > 2 && isItemsEmpty() {
+                    VStack {
+                        Picker(selection: $controller.type, label: EmptyView()) {
+                            Image(systemName: "tv.fill").tag(TypeEnum.anime)
+                            Image(systemName: "book.fill").tag(TypeEnum.manga)
+                        }
+                        .onChange(of: controller.type) { _ in
+                            if searchText.count > 2 && controller.isItemsEmpty() {
+                                Task {
                                     await controller.search(searchText)
                                 }
                             }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal, 10)
-                            .disabled(controller.isPageLoading)
-                            List {
-                                if controller.type == .anime {
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 10)
+                        .disabled(controller.isPageLoading)
+                        if controller.type == .anime {
+                            ZStack {
+                                List {
                                     ForEach(controller.animeItems, id: \.forEachId) { item in
                                         AnimeMangaListItem(item.id, item.node.title, .anime)
-                                            .task {
-                                                await controller.loadMoreIfNeeded(searchText, item)
-                                            }
-                                    }
-                                } else if controller.type == .manga {
-                                    ForEach(controller.mangaItems, id: \.forEachId) { item in
-                                        AnimeMangaListItem(item.id, item.node.title, .manga)
-                                            .task {
-                                                await controller.loadMoreIfNeeded(searchText, item)
+                                            .onAppear {
+                                                Task {
+                                                    await controller.loadMoreIfNeeded(searchText, item)
+                                                }
                                             }
                                     }
                                 }
+                                if controller.isAnimeSearchLoading {
+                                    LoadingView()
+                                }
                             }
-                        }
-                        if controller.isSearchLoading {
-                            LoadingView()
+                        } else if controller.type == .manga {
+                            ZStack {
+                                List {
+                                    ForEach(controller.mangaItems, id: \.forEachId) { item in
+                                        AnimeMangaListItem(item.id, item.node.title, .manga)
+                                            .onAppear {
+                                                Task {
+                                                    await controller.loadMoreIfNeeded(searchText, item)
+                                                }
+                                            }
+                                    }
+                                }
+                                if controller.isMangaSearchLoading {
+                                    LoadingView()
+                                }
+                            }
                         }
                     }
                 } else {
@@ -218,8 +228,9 @@ struct SearchView: View {
             .searchable_ios16(text: $searchText, isPresented: $isPresented, prompt: "Search MAL")
             .task(id: searchText) {
                 if searchText.count > 2 {
-                    if isItemsEmpty() {
+                    if previousSearch != searchText {
                         await controller.search(searchText)
+                        previousSearch = searchText
                     }
                 } else {
                     controller.animeItems = []

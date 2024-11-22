@@ -27,7 +27,7 @@ struct SeasonPicker: View {
                 Text("Fall").tag("fall")
             }
             .onChange(of: controller.season) { _ in
-                if controller.isSeasonEmpty() {
+                if controller.shouldRefresh() {
                     Task {
                         await controller.refresh()
                     }
@@ -38,6 +38,5 @@ struct SeasonPicker: View {
         }
         .padding(5)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .disabled(controller.isLoading)
     }
 }
