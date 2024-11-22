@@ -18,6 +18,6 @@ Used the MyAnimeList and Jikan API.
 ## Things to be done
 
 * Refactor alert messages when there is network error / authentication errors
-* Add settings page for customisation and fix user profile
+* Add settings page for customisation
 * Add swiping gestures on list page
 * Try integration with Spotify API
