@@ -11,6 +11,8 @@ import AuthenticationServices
 struct SettingsView: View {
     @StateObject var networker = NetworkManager.shared
     @State private var isAuthenticating = false
+    @State private var isLoading = false
+    @State private var isLoadingError = false
     @State private var isAuthenticatingError = false
     
     private func isCancelledLoginError(_ error: Error) -> Bool {
@@ -36,7 +38,7 @@ struct SettingsView: View {
             List {
                 Section {
                     ZStack {
-                        if isAuthenticating {
+                        if isAuthenticating || isLoading {
                             ProgressView()
                                 .frame(maxWidth: .infinity, alignment: .center)
                         } else if !networker.isSignedIn {
@@ -54,9 +56,7 @@ struct SettingsView: View {
                                 ProfileView(user)
                             } label: {
                                 HStack {
-                                    if let _ = user.picture {
-                                        ImageFrame("userImage", 80, 80)
-                                    }
+                                    ImageFrame("userImage", 80, 80, true)
                                     VStack {
                                         Text(user.name ?? "")
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,6 +68,26 @@ struct SettingsView: View {
                                     .padding(20)
                                 }
                             }
+                        } else {
+                            VStack {
+                                Text("Something went wrong")
+                                Button {
+                                    Task {
+                                        isLoading = true
+                                        do {
+                                            try await networker.getUserProfile()
+                                            isLoading = false
+                                        } catch {
+                                            isLoading = false
+                                            isLoadingError = true
+                                        }
+                                    }
+                                } label: {
+                                    Text("Try again")
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
                 }
@@ -82,6 +102,13 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .alert("Could not successfully sign in", isPresented: $isAuthenticatingError) {
                 Button("Ok") {}
+            }
+            .simpleToast(isPresented: $isLoadingError, options: alertToastOptions) {
+                Text("Unable to load")
+                    .padding(20)
+                    .background(.red)
+                    .foregroundStyle(.white)
+                    .cornerRadius(10)
             }
         }
     }

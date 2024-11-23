@@ -12,13 +12,15 @@ struct ImageFrame: View {
     private let id: String
     private let width: CGFloat
     private let height: CGFloat
+    private let isProfile: Bool
     let networker = NetworkManager.shared
     
-    init(_ id: String, _ width: CGFloat, _ height: CGFloat) {
+    init(_ id: String, _ width: CGFloat, _ height: CGFloat, _ isProfile: Bool = false) {
         self._controller = StateObject(wrappedValue: ImageFrameController(id))
         self.id = id
         self.width = width
         self.height = height
+        self.isProfile = isProfile
     }
     
     var body: some View {
@@ -30,12 +32,23 @@ struct ImageFrame: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(radius: 2)
         } else {
-            networker.getImage(id: id)
-                .resizable()
-                .scaledToFill()
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(radius: 2)
+            if isProfile {
+                if let data = UserDefaults.standard.data(forKey: id), let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: width, height: height)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .shadow(radius: 2)
+                }
+            } else {
+                networker.getImage(id: id)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(radius: 2)
+            }
         }
     }
 }

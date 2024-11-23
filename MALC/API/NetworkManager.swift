@@ -63,10 +63,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
                 }
                 print("Currently logged in")
                 
-                let user = try await self.getUserProfile()
-                self.user = user
-                imageUrlMap["userImage"] = user.picture
-                await downloadImage(id: "userImage", urlString: user.picture)
+                self.user = User(name: UserDefaults.standard.string(forKey: "name"), joinedAt: UserDefaults.standard.string(forKey: "joinedAt"), picture: UserDefaults.standard.string(forKey: "picture"))
             }
         }
     }
@@ -179,9 +176,65 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         }
         let accessToken = try await getAccessToken(token, pkce)
         self.isSignedIn = true
-        let user = try await getUserProfile(accessToken)
-        self.user = user
-        await downloadImage(id: "userImage", urlString: user.picture)
+        try await getUserProfile(accessToken)
+    }
+    
+    func getUserProfile(_ token: String? = nil, _ retries: Int = 3) async throws -> Void {
+        if retries == 0 {
+            throw NetworkError.outOfRetries
+        }
+        let url = URL(string: malBaseApi + "/users/@me")!
+        let config = URLSessionConfiguration.default
+        config.httpAdditionalHeaders = [
+            "X-MAL-CLIENT-ID": clientId
+        ]
+        var hasToken = false
+        if let token = keychain["accessToken"] {
+            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+            hasToken = true
+        } else if let token = token {
+            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
+            hasToken = true
+        }
+        let session = URLSession(configuration: config)
+        let (data, response) = try await session.data(for: URLRequest(url: url))
+            
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.badResponse
+        }
+            
+        if httpResponse.statusCode == 401 && hasToken {
+            try await refreshToken()
+            return try await getUserProfile(token, retries - 1)
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 404 {
+                throw NetworkError.notFound
+            } else {
+                throw NetworkError.badStatusCode(httpResponse.statusCode)
+            }
+        }
+            
+        do {
+            let user = try decoder.decode(User.self, from: data)
+            self.user = user
+            UserDefaults.standard.set(user.name, forKey: "name")
+            UserDefaults.standard.set(user.joinedAt, forKey: "joinedAt")
+            UserDefaults.standard.set(user.picture, forKey: "picture")
+            if let image = user.picture {
+                let url = URL(string: image)!
+                let data = try await download(imageUrl: url)
+                UserDefaults.standard.set(data, forKey: "userImage")
+            }
+        } catch {
+            throw NetworkError.jsonParseFailure
+        }
+    }
+    
+    func getUserStatistics() async throws -> UserStatistics {
+        let response = try await getJikanResponse(urlExtend: "/users/\(user?.name ?? "")/statistics", type: JikanUserStatisticsResponse.self)
+        return response.data
     }
 
     // Sign out user
@@ -367,56 +420,6 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
         print("edited successfully")
     }
     
-    func getUserProfile(_ token: String? = nil, _ retries: Int = 3) async throws -> User {
-        if retries == 0 {
-            throw NetworkError.outOfRetries
-        }
-        let url = URL(string: malBaseApi + "/users/@me")!
-        let config = URLSessionConfiguration.default
-        config.httpAdditionalHeaders = [
-            "X-MAL-CLIENT-ID": clientId
-        ]
-        var hasToken = false
-        if let token = keychain["accessToken"] {
-            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
-            hasToken = true
-        } else if let token = token {
-            config.httpAdditionalHeaders?["Authorization"] = "Bearer \(token)"
-            hasToken = true
-        }
-        let session = URLSession(configuration: config)
-        let (data, response) = try await session.data(for: URLRequest(url: url))
-            
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.badResponse
-        }
-            
-        if httpResponse.statusCode == 401 && hasToken {
-            try await refreshToken()
-            return try await getUserProfile(token, retries - 1)
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            if httpResponse.statusCode == 404 {
-                throw NetworkError.notFound
-            } else {
-                throw NetworkError.badStatusCode(httpResponse.statusCode)
-            }
-        }
-            
-        do {
-            let user = try decoder.decode(User.self, from: data)
-            return user
-        } catch {
-            throw NetworkError.jsonParseFailure
-        }
-    }
-    
-    func getUserStatistics() async throws -> UserStatistics {
-        let response = try await getJikanResponse(urlExtend: "/users/\(user?.name ?? "")/statistics", type: JikanUserStatisticsResponse.self)
-        return response.data
-    }
-    
     func getUserAnimeList(page: Int, status: StatusEnum, sort: String) async throws -> [MALListAnime] {
         let response = try await getMALResponse(urlExtend: "/users/@me/animelist?fields=list_status,num_episodes\(status == .none ? "" : "&status=\(status.toParameter())")&sort=\(sort)&limit=50&offset=\((page - 1) * 50)", type: MALAnimeListResponse.self)
         return response.data
@@ -541,7 +544,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
     }
     
     // Download image
-    private func download(id: String, imageUrl: URL) async throws -> Void {
+    private func download(imageUrl: URL) async throws -> Data {
         let (localUrl, response) = try await URLSession.shared.download(for: URLRequest(url: imageUrl))
             
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -554,9 +557,7 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             
         do {
             let data = try Data(contentsOf: localUrl)
-            let cache = ImageCache()
-            cache.image = data as NSData
-            self.imageCache.setObject(cache, forKey: id as NSString)
+            return data
         } catch let error {
             throw NetworkError.unknownError(error)
         }
@@ -578,7 +579,10 @@ class NetworkManager: NSObject, ObservableObject, ASWebAuthenticationPresentatio
             do {
                 imageUrlMap[id] = urlString
                 let url = URL(string: urlString)!
-                return try await download(id: id, imageUrl: url)
+                let data = try await download(imageUrl: url)
+                let cache = ImageCache()
+                cache.image = data as NSData
+                self.imageCache.setObject(cache, forKey: id as NSString)
             } catch {
                 print("Error downloading image")
             }
