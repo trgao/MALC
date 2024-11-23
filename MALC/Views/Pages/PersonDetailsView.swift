@@ -10,6 +10,7 @@ import SimpleToast
 
 struct PersonDetailsView: View {
     @StateObject var controller: PersonDetailsViewController
+    @State private var isRefresh = false
     private let id: Int
     private let imageUrl: String?
     let dateFormatterPrint = DateFormatter()
@@ -25,7 +26,8 @@ struct PersonDetailsView: View {
         ZStack {
             if controller.isLoading {
                 LoadingView()
-            } else if let person = controller.person {
+            }
+            if let person = controller.person {
                 List {
                     Section {
                         VStack(alignment: .center) {
@@ -70,6 +72,15 @@ struct PersonDetailsView: View {
                 .shadow(radius: 0.5)
                 .background(Color(.systemGray6))
                 .scrollContentBackground(.hidden)
+                .task(id: isRefresh) {
+                    if isRefresh {
+                        await controller.refresh()
+                        isRefresh = false
+                    }
+                }
+                .refreshable {
+                    isRefresh = true
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -79,6 +90,9 @@ struct PersonDetailsView: View {
                 .background(.red)
                 .foregroundStyle(.white)
                 .cornerRadius(10)
+        }
+        .task {
+            await controller.refresh()
         }
     }
 }

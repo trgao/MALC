@@ -15,6 +15,8 @@ class ImageFrameController: ObservableObject {
     
     init(_ id: String) {
         self.id = id
+        
+        // Check if image is in cache
         if let _ = networker.imageCache.object(forKey: id as NSString) {}
         else {
             isLoading = true

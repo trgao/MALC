@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AnimeCreditsView: View {
     @StateObject var controller: AnimeCreditsViewController
+    @State private var isRefresh = false
     private let openingThemes: [Theme]?
     private let endingThemes: [Theme]?
     
@@ -19,9 +20,7 @@ struct AnimeCreditsView: View {
     }
     
     var body: some View {
-        if controller.isLoading {
-            LoadingView()
-        } else {
+        ZStack {
             List {
                 if let openingThemes = openingThemes {
                     Section("Opening Themes") {
@@ -65,6 +64,21 @@ struct AnimeCreditsView: View {
                     }
                 }
             }
+            .task(id: isRefresh) {
+                if isRefresh {
+                    await controller.refresh()
+                    isRefresh = false
+                }
+            }
+            .refreshable {
+                isRefresh = true
+            }
+            if controller.isLoading {
+                LoadingView()
+            }
+        }
+        .task {
+            await controller.refresh()
         }
     }
 }

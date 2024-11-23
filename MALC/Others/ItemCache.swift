@@ -1,9 +1,6 @@
 //
 //  ItemCache.swift
-//  MALC
-//
-//  Created by Gao Tianrun on 20/11/24.
-//  Followed https://www.swiftbysundell.com/articles/caching-in-swift/
+//  Code taken from https://www.swiftbysundell.com/articles/caching-in-swift/
 //
 
 import Foundation

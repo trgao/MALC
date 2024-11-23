@@ -38,5 +38,8 @@ struct CharactersListView: View {
                 LoadingView()
             }
         }
+        .task {
+            await controller.loadImages()
+        }
     }
 }

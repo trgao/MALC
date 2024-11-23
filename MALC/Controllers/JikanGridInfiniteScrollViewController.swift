@@ -12,9 +12,9 @@ class JikanGridInfiniteScrollViewController: ObservableObject {
     @Published var items = [JikanListItem]()
     @Published var isLoading = true
     @Published var isLoadingError = false
-    private var ids: Set<Int> = []
     private var currentPage = 1
     private var canLoadMorePages = true
+    private var ids: Set<Int> = [] // Set is needed to remove duplicates from response
     private let urlExtend: String
     private let type: TypeEnum
     let networker = NetworkManager.shared
@@ -22,11 +22,9 @@ class JikanGridInfiniteScrollViewController: ObservableObject {
     init(_ urlExtend: String, _ type: TypeEnum) {
         self.urlExtend = urlExtend
         self.type = type
-        Task {
-            await refresh()
-        }
     }
     
+    // Refresh the current anime/manga list
     func refresh() async -> Void {
         currentPage = 1
         canLoadMorePages = true
@@ -80,6 +78,7 @@ class JikanGridInfiniteScrollViewController: ObservableObject {
         }
     }
     
+    // Load more of the current anime/manga list
     private func loadMore() async -> Void {
         // only load more when it is not loading and there are more pages to be loaded
         guard !isLoading && canLoadMorePages else {
@@ -141,6 +140,7 @@ class JikanGridInfiniteScrollViewController: ObservableObject {
         }
     }
     
+    // Load more items when reaching the 5th last items in list
     func loadMoreIfNeeded(currentItem item: JikanListItem?) async -> Void {
         guard let item = item else {
             return await loadMore()

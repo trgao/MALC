@@ -36,6 +36,9 @@ struct JikanGridInfiniteScrollView: View {
                     }
                 }
             }
+            .task {
+                await controller.refresh()
+            }
             .navigationTitle(title)
             .simpleToast(isPresented: $controller.isLoadingError, options: alertToastOptions) {
                 Text("Unable to load")

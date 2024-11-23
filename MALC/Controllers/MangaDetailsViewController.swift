@@ -20,6 +20,8 @@ class MangaDetailsViewController: ObservableObject {
     
     init(_ id: Int) {
         self.id = id
+        
+        // Check if manga details is already in cache
         if let mangaDetails = networker.mangaCache[id] {
             self.manga = mangaDetails.manga
             self.characters = mangaDetails.characters
@@ -38,6 +40,7 @@ class MangaDetailsViewController: ObservableObject {
         }
     }
     
+    // Load all manga details
     private func getMangaDetails() async throws -> Void {
         let manga = try await networker.getMangaDetails(id: id)
         let characterList = try await networker.getMangaCharacters(id: id)
@@ -78,6 +81,7 @@ class MangaDetailsViewController: ObservableObject {
         }
     }
     
+    // Refresh the current manga details page
     func refresh() async -> Void {
         isLoading = true
         isLoadingError = false
